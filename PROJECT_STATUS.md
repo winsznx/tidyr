@@ -263,7 +263,86 @@ an explicitly deferred item, not a silent gap — Permit2 itself supports it
 (`SignatureVerification.sol`) and TIDYR will exercise it if/when smart-contract wallet
 support is added to the execution scheduler.
 
-**Commit hash:** recorded after this phase's commit (see `git log`).
+**Commit hash:** `31519cb`
 
 **Next phase:** Phase 4 — SweepExecutor core (validation, Permit2 pull, allowlisted
 adapter execution, balance-delta isolation, remainder return, events).
+
+---
+
+## Phase 4 — Secure Sweep Execution
+
+**Objective:** Implement `SweepExecutor` itself — the contract that validates a signed
+plan, pulls exactly the tokens it authorizes via the Phase 3 Permit2 witness, runs
+allowlisted adapter swaps, performs transfers/discards/burns, settles output, and
+returns any unconsumed input — with the full security-pattern set from PRD §5 and the
+§19 corrections (no executor-side revoke, corrected `allowFailure` semantics, plan-fund
+isolation from pre-existing balances).
+
+**Files created:**
+
+- `packages/contracts/src/SweepExecutor.sol` — the core contract:
+  `Ownable2Step` + `ReentrancyGuard`; immutable `PERMIT2`/`WMON`; owner-managed adapter
+  and output-token allowlists; `executeSweep` validation pipeline (owner match, non-zero
+  recipient, output-token allowlist, deadline, sequential nonce, plan shape); Permit2
+  batch-witness pull using Phase 3's `TidyrWitness`/`aggregateTokenAmounts`; a
+  balance-delta swap loop with the corrected §19.9 `allowFailure` semantics (a "successful"
+  under-delivering adapter call is always fatal, never a soft failure); WMON unwrap for
+  native MON output; balance-delta-from-pre-pull-baseline settlement and remainder-return
+  (§19.10 isolation from pre-existing/other-plan balances); a narrowly-scoped
+  `recoverStrayTokens` sharing `executeSweep`'s reentrancy lock so it can never run
+  mid-execution
+- `packages/contracts/src/interfaces/IAdapter.sol`, `IBurnable.sol`, `IWMON.sol`
+- `packages/contracts/test/mocks/{MockAdapter,MockWMON,MockBurnableERC20,MockReentrantAdapter}.sol`
+  — controllable test doubles so SweepExecutor's handling of adapter results can be
+  tested independently of any real DEX (PancakeV2Adapter/UniswapV3Adapter get their own
+  tests in Phase 5)
+- `packages/contracts/test/SweepExecutor.t.sol` — 19 unit tests (every happy path: ERC20
+  output, native MON output via WMON unwrap, transfer/discard/burn actions; every
+  validation failure: wrong owner, zero recipient, disallowed output token, expired
+  plan, reused nonce, unregistered adapter, ambiguous swap-into-settlement-token, empty
+  plan; `allowFailure` correctness including the under-delivery-always-fatal case;
+  pre-existing-balance isolation; owner-only + reentrancy-blocked recovery; a malicious
+  reentrant adapter) plus 3 fuzz tests (256 runs each: swap conservation, transfer/discard
+  non-retention, pre-existing-balance non-attribution)
+- `packages/contracts/test/SweepExecutorInvariants.t.sol` — a stateful handler driving
+  128 runs × 64 sequential real-signature sweeps (8,192 calls) from the same owner,
+  checking two invariants after every call: the executor never retains a touched-token
+  balance, and the owner's nonce always exactly equals the number of successful calls
+
+**Requirements satisfied:** all Phase 4 acceptance criteria — unit tests for every
+validation; fuzz tests for action arrays and amounts; invariant that the executor cannot
+spend more than Permit2 authorized (structural: the only pull path is the witness-bound
+batch permit); invariant that a plan cannot consume pre-existing balances; invariant that
+successful execution retains zero active-plan balance; invariant that a nonce cannot be
+reused; invariant that an unregistered adapter is unreachable; no arbitrary call target
+exists (only `IAdapter.swap` and a native-MON send to the plan's own recipient).
+
+**A real bug found and fixed while building the invariant test (not a contract bug — a
+test harness bug, but worth recording since it shaped the final invariant suite):** the
+handler's `runSweep` called `bound(amount, 1, DUST.balanceOf(OWNER))` without checking
+whether that balance had already reached zero after enough prior successful sweeps,
+which made `bound` revert with "Max is less than min" once the fuzzer's sequence drained
+the owner's balance. Fixed by returning early when the owner's balance is zero, letting
+later calls in a sequence become no-ops rather than reverting the whole run.
+
+**Commands executed and results:**
+
+```
+forge clean && forge build                                        -> successful (0.8.17 + 0.8.26 units)
+forge test --no-match-contract SweepExecutorInvariantsTest         -> 42 passed, 0 failed
+forge test --match-contract SweepExecutorInvariantsTest            -> 2 invariants passed (8192 calls each, 0 reverts)
+grep -rn "delegatecall|tx.origin" src/                             -> no matches (only a doc comment mentions delegatecall)
+forge snapshot                                                     -> written to packages/contracts/.gas-snapshot
+```
+
+**Unresolved risks:** none new. Adapters themselves (PancakeV2Adapter/UniswapV3Adapter)
+don't exist yet — Phase 4's tests exercise SweepExecutor's handling of adapter results
+generically via `MockAdapter`; real DEX integration correctness is Phase 5's scope, not
+assumed here.
+
+**Commit hash:** recorded after this phase's commit (see `git log`).
+
+**Next phase:** Phase 5 — PancakeV2Adapter (direct pair interaction, per conflict C-1)
+and UniswapV3Adapter (strict path/command allowlist against the verified Monad
+deployment).
