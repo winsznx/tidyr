@@ -26,8 +26,13 @@ contract UniswapV3Adapter is IAdapter, Ownable2Step {
 
     mapping(address => bool) public allowedIntermediateAssets;
 
+    /// @dev Security-addendum hardening (pre-Phase-7 review): see SweepExecutor's
+    /// `configurationFrozen` for rationale - same irreversible-lock pattern here.
+    bool public configurationFrozen;
+
     event IntermediateAssetAllowed(address indexed token);
     event IntermediateAssetDisallowed(address indexed token);
+    event ConfigurationFrozen();
 
     error RouteExpired();
     error ZeroMinAmountOut();
@@ -35,6 +40,12 @@ contract UniswapV3Adapter is IAdapter, Ownable2Step {
     error PathTokenOutMismatch();
     error IntermediateAssetNotAllowed(address token);
     error ZeroAddress();
+    error ConfigurationIsFrozen();
+
+    modifier whenNotFrozen() {
+        if (configurationFrozen) revert ConfigurationIsFrozen();
+        _;
+    }
 
     constructor(address router_, address wmon_, address initialOwner_) Ownable(initialOwner_) {
         if (router_ == address(0) || wmon_ == address(0) || initialOwner_ == address(0)) revert ZeroAddress();
@@ -44,15 +55,20 @@ contract UniswapV3Adapter is IAdapter, Ownable2Step {
         emit IntermediateAssetAllowed(wmon_);
     }
 
-    function allowIntermediateAsset(address token) external onlyOwner {
+    function allowIntermediateAsset(address token) external onlyOwner whenNotFrozen {
         if (token == address(0)) revert ZeroAddress();
         allowedIntermediateAssets[token] = true;
         emit IntermediateAssetAllowed(token);
     }
 
-    function disallowIntermediateAsset(address token) external onlyOwner {
+    function disallowIntermediateAsset(address token) external onlyOwner whenNotFrozen {
         allowedIntermediateAssets[token] = false;
         emit IntermediateAssetDisallowed(token);
+    }
+
+    function freezeConfiguration() external onlyOwner {
+        configurationFrozen = true;
+        emit ConfigurationFrozen();
     }
 
     /// @param routeData the raw Uniswap V3 packed path bytes (token|fee|token|fee|token...)

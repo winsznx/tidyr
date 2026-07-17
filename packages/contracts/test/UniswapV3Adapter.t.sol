@@ -112,6 +112,25 @@ contract UniswapV3AdapterTest is Test {
         assertFalse(adapter.allowedIntermediateAssets(address(rogue)));
     }
 
+    function test_freezeConfiguration_blocksIntermediateAssetChanges() public {
+        vm.prank(owner);
+        adapter.freezeConfiguration();
+        assertTrue(adapter.configurationFrozen());
+
+        vm.prank(owner);
+        vm.expectRevert(UniswapV3Adapter.ConfigurationIsFrozen.selector);
+        adapter.allowIntermediateAsset(address(rogue));
+
+        vm.prank(owner);
+        vm.expectRevert(UniswapV3Adapter.ConfigurationIsFrozen.selector);
+        adapter.disallowIntermediateAsset(address(wmon));
+    }
+
+    function test_freezeConfiguration_onlyOwner() public {
+        vm.expectRevert();
+        adapter.freezeConfiguration();
+    }
+
     /// @dev Approval must reset to 0 after the call regardless of outcome (PRD §5.5) -
     /// verified here since the router mock doesn't consume the full allowance itself.
     function test_approvalResetAfterSwap() public {

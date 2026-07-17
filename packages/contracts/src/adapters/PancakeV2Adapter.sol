@@ -25,8 +25,13 @@ contract PancakeV2Adapter is IAdapter, Ownable2Step {
 
     mapping(address => bool) public allowedIntermediateAssets;
 
+    /// @dev Security-addendum hardening (pre-Phase-7 review): see SweepExecutor's
+    /// `configurationFrozen` for rationale - same irreversible-lock pattern here.
+    bool public configurationFrozen;
+
     event IntermediateAssetAllowed(address indexed token);
     event IntermediateAssetDisallowed(address indexed token);
+    event ConfigurationFrozen();
 
     error RouteExpired();
     error ZeroMinAmountOut();
@@ -39,6 +44,12 @@ contract PancakeV2Adapter is IAdapter, Ownable2Step {
     error InsufficientInputAmount();
     error InsufficientOutputAmount(uint256 amountOut, uint256 minAmountOut);
     error ZeroAddress();
+    error ConfigurationIsFrozen();
+
+    modifier whenNotFrozen() {
+        if (configurationFrozen) revert ConfigurationIsFrozen();
+        _;
+    }
 
     constructor(address factory_, address wmon_, address initialOwner_) Ownable(initialOwner_) {
         if (factory_ == address(0) || wmon_ == address(0) || initialOwner_ == address(0)) revert ZeroAddress();
@@ -48,15 +59,20 @@ contract PancakeV2Adapter is IAdapter, Ownable2Step {
         emit IntermediateAssetAllowed(wmon_);
     }
 
-    function allowIntermediateAsset(address token) external onlyOwner {
+    function allowIntermediateAsset(address token) external onlyOwner whenNotFrozen {
         if (token == address(0)) revert ZeroAddress();
         allowedIntermediateAssets[token] = true;
         emit IntermediateAssetAllowed(token);
     }
 
-    function disallowIntermediateAsset(address token) external onlyOwner {
+    function disallowIntermediateAsset(address token) external onlyOwner whenNotFrozen {
         allowedIntermediateAssets[token] = false;
         emit IntermediateAssetDisallowed(token);
+    }
+
+    function freezeConfiguration() external onlyOwner {
+        configurationFrozen = true;
+        emit ConfigurationFrozen();
     }
 
     /// @param routeData ABI-encoded `address[] path`, e.g. [DUST1, WMON] or [DUST1, WMON, USDC]

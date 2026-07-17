@@ -185,4 +185,23 @@ contract PancakeV2AdapterTest is Test {
         adapter.disallowIntermediateAsset(address(rogue));
         assertFalse(adapter.allowedIntermediateAssets(address(rogue)));
     }
+
+    function test_freezeConfiguration_blocksIntermediateAssetChanges() public {
+        vm.prank(owner);
+        adapter.freezeConfiguration();
+        assertTrue(adapter.configurationFrozen());
+
+        vm.prank(owner);
+        vm.expectRevert(PancakeV2Adapter.ConfigurationIsFrozen.selector);
+        adapter.allowIntermediateAsset(address(rogue));
+
+        vm.prank(owner);
+        vm.expectRevert(PancakeV2Adapter.ConfigurationIsFrozen.selector);
+        adapter.disallowIntermediateAsset(address(wmon));
+    }
+
+    function test_freezeConfiguration_onlyOwner() public {
+        vm.expectRevert();
+        adapter.freezeConfiguration();
+    }
 }

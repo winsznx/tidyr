@@ -43,11 +43,19 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
     mapping(address => bool) public allowedAdapters;
     mapping(address => bool) public allowedOutputTokens;
 
+    /// @dev Security-addendum hardening (pre-Phase-7 review): once true, the adapter
+    /// and output-token registries can never change again. Mitigates a compromised- or
+    /// coerced-owner registering a malicious adapter after users have started trusting
+    /// this deployment. A new DEX integration after freezing requires a new
+    /// SweepExecutor deployment, not a silent change to this one's security boundary.
+    bool public configurationFrozen;
+
     event AdapterRegistered(address indexed adapter);
     event AdapterRemoved(address indexed adapter);
     event OutputTokenAllowed(address indexed token);
     event OutputTokenDisallowed(address indexed token);
     event StrayTokensRecovered(address indexed token, uint256 amount, address indexed to);
+    event ConfigurationFrozen();
 
     event ActionExecuted(
         bytes32 indexed executionPlanHash,
@@ -86,6 +94,7 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
     error AdapterInvariantViolation(address adapter, uint256 actualOut, uint256 minRequired);
     error NativeTransferFailed();
     error ZeroAddress();
+    error ConfigurationIsFrozen();
 
     constructor(address permit2_, address wmon_, address initialOwner_) Ownable(initialOwner_) {
         if (permit2_ == address(0) || wmon_ == address(0) || initialOwner_ == address(0)) revert ZeroAddress();
@@ -97,30 +106,43 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
 
     receive() external payable {}
 
+    modifier whenNotFrozen() {
+        if (configurationFrozen) revert ConfigurationIsFrozen();
+        _;
+    }
+
     // ---------------------------------------------------------------------
     // Owner administration
     // ---------------------------------------------------------------------
 
-    function registerAdapter(address adapter) external onlyOwner {
+    function registerAdapter(address adapter) external onlyOwner whenNotFrozen {
         if (adapter == address(0)) revert ZeroAddress();
         allowedAdapters[adapter] = true;
         emit AdapterRegistered(adapter);
     }
 
-    function removeAdapter(address adapter) external onlyOwner {
+    function removeAdapter(address adapter) external onlyOwner whenNotFrozen {
         allowedAdapters[adapter] = false;
         emit AdapterRemoved(adapter);
     }
 
-    function registerOutputToken(address token) external onlyOwner {
+    function registerOutputToken(address token) external onlyOwner whenNotFrozen {
         if (token == address(0)) revert ZeroAddress();
         allowedOutputTokens[token] = true;
         emit OutputTokenAllowed(token);
     }
 
-    function removeOutputToken(address token) external onlyOwner {
+    function removeOutputToken(address token) external onlyOwner whenNotFrozen {
         allowedOutputTokens[token] = false;
         emit OutputTokenDisallowed(token);
+    }
+
+    /// @notice Permanently freezes the adapter and output-token registries. Irreversible
+    /// by design - there is no `unfreeze`. Recovery of stray balances remains available
+    /// afterward since it is unrelated to the execution security boundary.
+    function freezeConfiguration() external onlyOwner {
+        configurationFrozen = true;
+        emit ConfigurationFrozen();
     }
 
     /// @notice Recovers balances unrelated to any in-flight plan (e.g. tokens forcibly
@@ -150,7 +172,7 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
 
         SweepPlanLib.validatePlanShape(plan);
 
-        executionPlanHash = SweepPlanLib.hashPlan(plan);
+        executionPlanHash = SweepPlanLib.hashPlan(plan, block.chainid, address(this));
 
         address settlementToken = plan.outputToken == MON_NATIVE_SENTINEL ? address(WMON) : plan.outputToken;
 

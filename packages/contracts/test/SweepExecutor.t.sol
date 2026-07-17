@@ -84,7 +84,7 @@ contract SweepExecutorTest is Test {
                 keccak256(abi.encode(TOKEN_PERMISSIONS_TYPEHASH, tokens[i], amounts[i]));
         }
 
-        bytes32 executionPlanHash = SweepPlanLib.hashPlan(plan);
+        bytes32 executionPlanHash = SweepPlanLib.hashPlan(plan, block.chainid, address(executor));
         bytes32 witness = TidyrWitness.hashWitness(executionPlanHash);
         bytes32 typeHash = keccak256(abi.encodePacked(PERMIT_BATCH_WITNESS_STUB, TidyrWitness.WITNESS_TYPE_STRING));
 
@@ -411,6 +411,82 @@ contract SweepExecutorTest is Test {
         vm.prank(executorOwner);
         executor.recoverStrayTokens(address(dust1), 10 ether, executorOwner);
         assertEq(dust1.balanceOf(executorOwner), 10 ether);
+    }
+
+    // -----------------------------------------------------------------
+    // Security addendum (pre-Phase-7 review): freeze + Multicall3 rejection
+    // -----------------------------------------------------------------
+
+    function test_freezeConfiguration_blocksFurtherAdapterAndOutputTokenChanges() public {
+        MockAdapter another = new MockAdapter();
+        MockERC20 anotherOutput = new MockERC20("Another", "ANO");
+
+        vm.prank(executorOwner);
+        executor.freezeConfiguration();
+        assertTrue(executor.configurationFrozen());
+
+        vm.prank(executorOwner);
+        vm.expectRevert(SweepExecutor.ConfigurationIsFrozen.selector);
+        executor.registerAdapter(address(another));
+
+        vm.prank(executorOwner);
+        vm.expectRevert(SweepExecutor.ConfigurationIsFrozen.selector);
+        executor.removeAdapter(address(adapter));
+
+        vm.prank(executorOwner);
+        vm.expectRevert(SweepExecutor.ConfigurationIsFrozen.selector);
+        executor.registerOutputToken(address(anotherOutput));
+
+        vm.prank(executorOwner);
+        vm.expectRevert(SweepExecutor.ConfigurationIsFrozen.selector);
+        executor.removeOutputToken(address(usdc));
+    }
+
+    function test_freezeConfiguration_onlyOwner() public {
+        vm.expectRevert();
+        executor.freezeConfiguration();
+    }
+
+    function test_freezeConfiguration_doesNotBlockRecovery() public {
+        dust1.mint(address(executor), 5 ether);
+
+        vm.prank(executorOwner);
+        executor.freezeConfiguration();
+
+        vm.prank(executorOwner);
+        executor.recoverStrayTokens(address(dust1), 5 ether, executorOwner);
+        assertEq(dust1.balanceOf(executorOwner), 5 ether);
+    }
+
+    /// @dev Verified real Multicall3 deployment (docs/research/external-addresses.md) -
+    /// a batched-read-only helper anybody can instruct to call arbitrary targets with
+    /// arbitrary calldata. If it were ever registered as an adapter, an attacker could
+    /// have Multicall3 call `token.transferFrom(victim, attacker, allowance)` for anyone
+    /// who had approved Multicall3. TIDYR never approves Multicall3 for anything and
+    /// never registers it as an adapter - this test proves the latter is rejected the
+    /// same way any other unregistered/arbitrary address would be, with nothing special
+    /// carved out for it.
+    function test_multicall3_rejectedAsUnregisteredAdapter() public {
+        address multicall3 = 0xcA11bde05977b3631167028862bE2a173976CA11;
+
+        SweepPlanLib.SweepPlan memory plan = _emptyPlan(address(usdc));
+        SweepPlanLib.SwapAction[] memory swaps = new SweepPlanLib.SwapAction[](1);
+        swaps[0] = SweepPlanLib.SwapAction({
+            tokenIn: address(dust1),
+            amountIn: 1 ether,
+            adapter: multicall3,
+            minAmountOut: 1,
+            routeData: hex"",
+            allowFailure: false
+        });
+        plan.swaps = swaps;
+
+        bytes memory sig = _sign(plan);
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(SweepExecutor.AdapterNotAllowed.selector, multicall3));
+        executor.executeSweep(plan, sig);
+
+        assertFalse(executor.allowedAdapters(multicall3));
     }
 
     function test_maliciousReentrantAdapter_reverts() public {
