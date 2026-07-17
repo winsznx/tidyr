@@ -1,8 +1,9 @@
 export const PACKAGE_NAME = "@tidyr/shared" as const;
 
+export * from "./actions.ts";
+
 /**
- * Populated in Phase 2 (deterministic hashing) and Phase 9 (post-deployment
- * addresses). Intentionally empty here — this package must never ship
- * fabricated chain constants or addresses.
+ * Chain constants and deployed contract addresses are populated in Phase 9 once
+ * SweepExecutor and the adapters are actually deployed — this package must never
+ * ship fabricated addresses ahead of a real deployment.
  */
-export {};

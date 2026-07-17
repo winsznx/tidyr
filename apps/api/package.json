@@ -7,8 +7,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --experimental-strip-types src/**/*.test.ts",
-    "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js"
+    "dev": "node --experimental-strip-types --watch src/index.ts",
+    "start": "node --experimental-strip-types src/index.ts"
   },
   "dependencies": {
     "@tidyr/shared": "workspace:*",
@@ -17,7 +17,6 @@
   },
   "devDependencies": {
     "typescript": "5.7.2",
-    "@types/node": "22.10.2",
-    "tsx": "4.19.2"
+    "@types/node": "22.10.2"
   }
 }

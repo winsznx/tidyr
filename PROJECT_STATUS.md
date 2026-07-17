@@ -111,7 +111,90 @@ forge test (packages/contracts)  -> 1 passed (ToolchainSmoke — OZ v5 + Permit2
 **Unresolved risks:** none new. Phase 15 will need to replace `railway.json`'s minimal
 placeholder with real per-service configuration once Railway auth is available.
 
-**Commit hash:** recorded after this phase's commit (see `git log`).
+**Commit hash:** `bd53ed1`
 
 **Next phase:** Phase 2 — Chain constants, shared types, and deterministic display/execution
 hashing (Solidity + TypeScript golden vectors).
+
+---
+
+## Phase 2 — Action Structs and Deterministic Hashing
+
+**Objective:** Define the corrected `SweepPlan`/action structs (no executor-side
+`RevokeAction`, per §19.2) and implement `executionPlanHash` (Solidity) /
+`displayManifestHash` (TypeScript, RFC 8785) as two genuinely distinct hashes, with
+cross-language golden vectors proving Solidity and TypeScript agree byte-for-byte.
+
+**Files created:**
+
+- `packages/contracts/src/libraries/SweepPlanLib.sol` — `SwapAction`/`TransferAction`/
+  `DiscardAction`/`BurnAction`/`SweepPlan` structs (no `RevocationAction[]`),
+  `validatePlanShape` (empty/oversized rejection), `hashPlan` (`executionPlanHash`) with
+  per-action-array element-wise hashing so nested dynamic `bytes` fields
+  (`SwapAction.routeData`) can't introduce ABI-encoding ambiguity
+- `packages/contracts/test/SweepPlanLib.t.sol` — 12 tests: determinism, per-field
+  sensitivity (amount/recipient/outputToken/deadline/nonce), action-order sensitivity,
+  execution-hash-vs-display-hash distinctness, empty/oversized/exactly-max plan shape
+  validation
+- `packages/shared/src/actions.ts` — branded `Address`/`Hex` types (viem-compatible),
+  zod schemas mirroring the Solidity structs exactly, `MAX_ACTIONS`,
+  `MON_NATIVE_SENTINEL` (documented rationale: the cross-protocol `0xEeee...EEeE`
+  convention, not `address(0)`, so "native asset" stays distinguishable from
+  "unset/invalid"), the direct `WalletTransaction` union (revoke / Permit2 approval /
+  sweep execution / top-up / multi-send, per §19.2), and the capability-based
+  `TokenAssessment` type (§19.16 override — not an exclusive enum)
+- `packages/transaction-review/src/executionPlanHash.ts` — TypeScript mirror of
+  `SweepPlanLib.hashPlan` using viem's `encodeAbiParameters`/`keccak256`
+- `packages/transaction-review/src/displayManifestHash.ts` — RFC 8785 (JCS)
+  canonicalization via the `canonicalize` package + `keccak256` of the canonical string
+- `packages/transaction-review/src/executionPlanHash.test.ts` and
+  `displayManifestHash.test.ts` — 14 tests total, including the cross-language golden
+  vector assertion
+- `test-vectors/golden-vectors.md` — records Vector A's field values, the verified
+  shared hash, and how to reproduce it on both sides
+
+**Requirements satisfied:** all Phase 2 acceptance criteria — Solidity and TypeScript
+produce identical `executionPlanHash` for the same plan; action order, amount,
+recipient, output token, deadline, and nonce all change the hash; `displayManifestHash`
+and `executionPlanHash` are proven distinct for the same logical plan; empty and
+oversized (>50 actions) plans are rejected, exactly 50 is accepted.
+
+**Cross-language golden value (Vector A):**
+`0x184bb27ccf4286fdd2f69be2433e59715e5ce345badd2ba2f5688bd2368f1de5` — computed once by
+the Solidity implementation, independently reproduced by the TypeScript implementation
+before being hardcoded as the asserted constant in both test suites (not assumed).
+
+**Also fixed:** `packages/shared`'s `Address`/`Hex` types were initially plain `string`
+(zod's default inference), which would not have been type-compatible with viem's
+branded `` `0x${string}` `` types once `packages/transaction-review` started consuming
+them — caught during this phase and fixed with `.transform()` casts before it could
+surface as a real bug in Phase 3+.
+
+**Also fixed (monorepo infra, discovered while wiring this phase):** the original
+per-package `tsc` build emitted compiled `.js` via `outDir: dist`, which conflicts with
+`allowImportingTsExtensions` (required so Node's native TypeScript support can resolve
+`./actions.ts`-style relative imports at test/runtime). Resolved by making all internal
+packages resolve directly from `.ts` source (`main`/`types`/`exports` point at
+`src/index.ts`), with `tsc` now used purely for typechecking. `apps/api`'s `dev`/`start`
+scripts now use Node's built-in `--experimental-strip-types --watch` instead of a `tsx`
+dependency, and root `engines.node` was tightened to `>=22.6.0 <25` (the version where
+that flag exists).
+
+**Commands executed and results:**
+
+```
+forge test --match-contract SweepPlanLibTest   -> 12 passed (packages/contracts)
+forge build                                    -> Compiler run successful
+pnpm typecheck                                  -> 6/6 packages pass
+pnpm build                                      -> 6/6 packages pass
+pnpm test                                       -> all packages pass (transaction-review: 14, shared: 6)
+pnpm lint                                       -> clean
+pnpm format                                     -> clean
+```
+
+**Unresolved risks:** none new.
+
+**Commit hash:** recorded after this phase's commit (see `git log`).
+
+**Next phase:** Phase 3 — Permit2 witness binding to `executionPlanHash` (SignatureTransfer,
+exact per-token amount aggregation, replay/expiry/wrong-spender rejection tests).
