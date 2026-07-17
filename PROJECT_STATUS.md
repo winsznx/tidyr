@@ -478,7 +478,102 @@ forge test --no-match-path "*.fork.t.sol" --no-match-contract SweepExecutorInvar
 **Unresolved risks:** none new. Mainnet deployment of these contracts (real supply,
 real distributor funding) is Phase 9 — nothing here is deployed yet.
 
-**Commit hash:** recorded after this phase's commit (see `git log`).
+**Commit hash:** `124c0b9`
 
 **Next phase:** Phase 7 — Security hardening: fuzz/invariant/fork test expansion,
 Slither, gas snapshot review, threat-model documentation.
+
+---
+
+## Security Addendum — Pre-Phase-7 Review (branch `fix/security-addendum-before-phase-7`)
+
+**Trigger:** an external review, prompted by public discussion of a Multicall3
+approval-drain vulnerability class, requesting a mandatory security architecture audit
+of Phases 0–6 before Phase 7 begins.
+
+**Objective:** verify every claim in the review against the actual repository state —
+not assume the review's framing was correct, and not fabricate findings to look
+thorough where the code was already sound.
+
+**Outcome: zero P0 (fund-drain) findings.** The architecture already avoided every
+mechanism the review was concerned about — no Multicall3 reference exists anywhere in
+the codebase yet, no generic arbitrary-call execution surface exists in `SweepExecutor`,
+Permit2 integration already uses `SignatureTransfer` exclusively with exact amounts,
+`msg.sender == plan.owner` was already enforced, and balance-delta plan isolation was
+already the most heavily tested part of the codebase (Phase 4's 8,192-call invariant
+suite). Full citation-backed comparison in `docs/security-addendum-review.md`.
+
+**Two real hardening items identified and fixed** (not exploits — reasonable
+defense-in-depth the review asked for):
+
+1. **`executionPlanHash` now binds `chainId` and the executor's own address explicitly.**
+   `SweepPlanLib.hashPlan` gained two new leading parameters. This was not fixing an
+   exploitable gap — Permit2's own EIP-712 domain separator already includes chainId and
+   its own address, and Permit2 already binds the spender to `msg.sender` at signing
+   time (proven by the existing `test_wrongSpender_fails`) — but making it explicit in
+   TIDYR's own plan hash removes the reliance on an implicit upstream property. Golden
+   vector A's hash changed as a direct, expected, and re-verified consequence:
+   `0xdf7a8dd0108003ffa8b036d6471d7a6479a56d02b6b7737737c398e3515100d1`, cross-checked
+   byte-identical in both Solidity and TypeScript.
+2. **`freezeConfiguration()` added to `SweepExecutor`, `PancakeV2Adapter`, and
+   `UniswapV3Adapter`.** Once called (owner-only, irreversible), the adapter and
+   output-token registries can never change again — mitigating a compromised/coerced
+   owner registering a malicious adapter after users have started trusting a live
+   deployment. `recoverStrayTokens` deliberately remains available afterward since it's
+   unrelated to the execution security boundary.
+
+**One audit-clarity addition:** `test_multicall3_rejectedAsUnregisteredAdapter` proves
+the real, verified Multicall3 address is rejected the same way any other unregistered
+address would be — not because it was previously reachable (it wasn't), but because a
+named test is better evidence than "it's just not in the allowlist."
+
+**Explicitly deferred, not faked:** dynamic token discovery, the pricing/oracle
+service, and the three-layer transaction-review signing gate all belong to Phase 11/12,
+which haven't been reached yet. Rather than build disconnected stub code against
+infrastructure that doesn't exist, these are documented as binding design intent in
+`docs/token-support-model.md` and `docs/pricing-and-oracle-model.md`, with the one
+TS-level test the review specifically asked for
+(`approvalBuilder_rejectsMulticall3AsSpender`) explicitly tracked as a Phase 11
+requirement in `docs/implementation-plan.md` rather than written against code that
+doesn't exist.
+
+**Files created:**
+
+- `docs/security-addendum-review.md`, `docs/approval-architecture.md`,
+  `docs/permit2-witness-model.md`, `docs/token-support-model.md`,
+  `docs/pricing-and-oracle-model.md`
+- `artifacts/security-addendum/findings.md` (17-item P0–P3 table),
+  `artifacts/security-addendum/test-results.md`
+
+**Files changed:**
+
+- `packages/contracts/src/libraries/SweepPlanLib.sol` (`hashPlan` signature),
+  `packages/transaction-review/src/executionPlanHash.ts` (mirrored)
+- `packages/contracts/src/SweepExecutor.sol`,
+  `src/adapters/{PancakeV2Adapter,UniswapV3Adapter}.sol` (freeze mechanism +
+  `hashPlan` call-site update)
+- All test files that sign a plan (`SweepPlanLib.t.sol`, `Permit2Witness.t.sol`,
+  `SweepExecutor.t.sol`, `SweepExecutorAdapterIntegration.t.sol`,
+  `SweepExecutorInvariants.t.sol`) updated for the new `hashPlan` signature
+- `test-vectors/golden-vectors.md` (new hash + revision history entry)
+- `docs/implementation-plan.md` (Phase 11 row: tracked Multicall3-rejection
+  approval-builder test requirement)
+
+**Commands executed and results:**
+
+```
+forge build                                                             -> successful
+forge test --no-match-path "*.fork.t.sol" --no-match-contract SweepExecutorInvariantsTest
+                                                                         -> 87 passed, 0 failed
+forge test --match-path "*.fork.t.sol"                                  -> 2 passed (live Monad mainnet)
+forge test --match-contract SweepExecutorInvariantsTest                 -> 2 invariants passed (8192 calls)
+pnpm typecheck / build / test / lint / format                           -> all clean; transaction-review: 16 tests
+bash scripts/scan-secrets.sh                                            -> no secret patterns found
+forge snapshot                                                          -> packages/contracts/.gas-snapshot updated
+```
+
+**Unresolved risks:** none new. See `artifacts/security-addendum/findings.md` for the
+full disposition (P2/P3 items are tracked design-intent for Phase 11/12, not silent gaps).
+
+**Next:** Phase 7 as originally planned — Slither, expanded fuzz/invariant/fork
+coverage, gas review, threat-model documentation.
