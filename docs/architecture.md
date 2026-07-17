@@ -37,16 +37,16 @@ addendum and the verified-source findings in `docs/research/`.
 
 ## Package boundaries
 
-| Package | Responsibility | Must NOT do |
-|---|---|---|
-| `packages/contracts` | Foundry workspace: SweepExecutor, adapters, demo tokens, distributor, deploy/verify/liquidity scripts, full test suite | Hold logic that belongs in TS packages (quoting, classification) |
-| `packages/shared` | Chain config, deployed addresses, ABIs, Zod schemas, action/report types, error taxonomy | Import server secrets; must be safe for eventual frontend use |
-| `packages/routing` | PancakeV2 direct-pair quoting, Uniswap V3 quoting, 0x quoting, route comparison | Fabricate quotes when a provider is degraded — must return an honest degraded state |
-| `packages/transaction-review` | Display manifest + hash, execution plan + hash, calldata decode-and-compare, Permit2 typed data, gas review, simulation parsing, ERC-7730 descriptor generation | Approve a plan that fails any of the three review layers |
-| `packages/execution` | Multi-wallet execution graph/state machine, wallet capability detection, reserve-aware native MON scheduling | Assume wallets support atomic batching without checking `wallet_getCapabilities` |
-| `apps/api` | Hono service: discovery, allowances, quotes, simulation, manifest persistence, report retrieval, health | Proxy arbitrary RPC methods or arbitrary URLs; hold user keys |
-| `apps/indexer` | Finalized-event ingestion, idempotent processing, report reconstruction | Treat unfinalized data as authoritative |
-| `apps/web` | Reserved for the (later) frontend | Contain any UI screens in this phase |
+| Package                       | Responsibility                                                                                                                                                  | Must NOT do                                                                         |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `packages/contracts`          | Foundry workspace: SweepExecutor, adapters, demo tokens, distributor, deploy/verify/liquidity scripts, full test suite                                          | Hold logic that belongs in TS packages (quoting, classification)                    |
+| `packages/shared`             | Chain config, deployed addresses, ABIs, Zod schemas, action/report types, error taxonomy                                                                        | Import server secrets; must be safe for eventual frontend use                       |
+| `packages/routing`            | PancakeV2 direct-pair quoting, Uniswap V3 quoting, 0x quoting, route comparison                                                                                 | Fabricate quotes when a provider is degraded — must return an honest degraded state |
+| `packages/transaction-review` | Display manifest + hash, execution plan + hash, calldata decode-and-compare, Permit2 typed data, gas review, simulation parsing, ERC-7730 descriptor generation | Approve a plan that fails any of the three review layers                            |
+| `packages/execution`          | Multi-wallet execution graph/state machine, wallet capability detection, reserve-aware native MON scheduling                                                    | Assume wallets support atomic batching without checking `wallet_getCapabilities`    |
+| `apps/api`                    | Hono service: discovery, allowances, quotes, simulation, manifest persistence, report retrieval, health                                                         | Proxy arbitrary RPC methods or arbitrary URLs; hold user keys                       |
+| `apps/indexer`                | Finalized-event ingestion, idempotent processing, report reconstruction                                                                                         | Treat unfinalized data as authoritative                                             |
+| `apps/web`                    | Reserved for the (later) frontend                                                                                                                               | Contain any UI screens in this phase                                                |
 
 ## Data flow: plan → execution → report
 

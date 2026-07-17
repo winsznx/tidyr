@@ -27,7 +27,7 @@ tooling assumes:
 ~800ms typical finality (two consensus rounds after proposal).
 
 **Implementation consequence (binds PRD §19.6):** TIDYR's execution monitor and status
-report must only mark a wallet "complete" after the *Finalized* event/receipt, never after
+report must only mark a wallet "complete" after the _Finalized_ event/receipt, never after
 first-seen/`latest`. Show only the phases the active RPC provider actually exposes; never
 relabel `latest` as `finalized`.
 
@@ -50,7 +50,7 @@ statement, corrected from the PRD's flattened description:
   A transaction that would reduce a delegated EOA's balance below 10 MON
   **unconditionally reverts**.
 - **Undelegated** EOAs get an explicit carve-out: the reserve-balance algorithm allows
-  the *first* transaction (per sender) within the last *k* blocks to spend the balance
+  the _first_ transaction (per sender) within the last _k_ blocks to spend the balance
   below 10 MON. This is why the PRD's own §19.8 sequencing advice (finish everything
   else, wait 3 blocks, submit the native-MON-emptying transaction last) is the safe
   general strategy for undelegated wallets — but it is not an absolute protocol
@@ -62,6 +62,7 @@ statement, corrected from the PRD's flattened description:
 
 **Implementation consequence:** `packages/execution` must branch its native-MON safe-sweep
 calculation on delegation status:
+
 - delegated → hard-block any plan that would leave balance < 10 MON; offer an explicit
   undelegation transaction first.
 - undelegated → apply the reserve-plus-gas-buffer heuristic from PRD §19.8, but do not
@@ -93,7 +94,7 @@ signed transaction for TIDYR to hold and later broadcast. Consequences enforced 
   everything at once") is **only** claimed for wallets that report `atomicBatch` support
   via `wallet_getCapabilities` (EIP-5792). For all other wallets, each transaction is
   requested, signed, and broadcast by the wallet as one user-facing action, in nonce
-  order, and TIDYR's "concurrent broadcast" claim applies at the level of *initiating*
+  order, and TIDYR's "concurrent broadcast" claim applies at the level of _initiating_
   each wallet's first transaction near-simultaneously — not at the level of atomically
   co-signing every wallet's calldata ahead of time.
 - TIDYR must never claim atomic batching for a wallet that has not reported the

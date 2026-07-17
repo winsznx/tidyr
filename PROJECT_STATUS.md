@@ -7,6 +7,7 @@ addendum), inspect the repository, and produce the research, architecture, trace
 and risk documentation required before any implementation begins.
 
 **Files created:**
+
 - `docs/research/monad-source-map.md`
 - `docs/research/external-addresses.md`
 - `docs/architecture.md`
@@ -22,6 +23,7 @@ strategy, no unrecorded implementation assumptions, contradictions between PRD s
 documented with resolutions (see traceability matrix "Contradiction / conflict log").
 
 **Commands executed:**
+
 ```
 git init
 git checkout -b build/pre-frontend-production
@@ -41,7 +43,75 @@ router on Monad — resolved in design), R-3/R-11 (Monad-specific execution nuan
 literally stated in the PRD — resolved in design), R-13 (hackathon deadline vs. full
 scope — acknowledged, not a shortcut justification).
 
-**Commit hash:** recorded after this phase's commit (see `git log`).
+**Commit hash:** `e0a11a7`
 
 **Next phase:** Phase 1 — Monorepo Foundation (pnpm workspace, Foundry workspace, CI,
 `.env.example`, pinned toolchain versions).
+
+---
+
+## Phase 1 — Monorepo Foundation
+
+**Objective:** Stand up the Railway-ready pnpm monorepo and Foundry workspace with pinned
+toolchain versions, shared TypeScript strict-mode configuration, CI, and environment
+variable documentation — no product logic yet.
+
+**Files created:**
+
+- `pnpm-workspace.yaml`, `package.json`, `tsconfig.base.json`, `eslint.config.js`,
+  `.prettierrc.json`, `.prettierignore`
+- `packages/shared`, `packages/routing`, `packages/transaction-review`,
+  `packages/execution` — each a strict-TS package with a passing identity test
+- `apps/api` — Hono skeleton with a real `/health/live` liveness endpoint (readiness
+  deferred to Phase 12/13, not faked)
+- `apps/indexer` — skeleton, logic deferred to Phase 13
+- `packages/contracts` — Foundry workspace: `forge init`, pinned `solc 0.8.26`; libs
+  vendored as real git submodules (not copied source) pinned to exact refs —
+  `forge-std@v1.16.2`, `openzeppelin-contracts@v5.1.0`, `permit2@cc56ad0` (Permit2 has no
+  version tags; pinned to an exact commit SHA instead); `foundry.toml` pins
+  optimizer/fuzz/invariant run counts and a CI profile with higher run counts; a toolchain
+  smoke test proves OZ v5 + Permit2 imports resolve and compile
+- `.env.example` mirroring PRD §19.18, pre-filled with the addresses verified in Phase 0
+  (WMON, Permit2, PancakeSwap V2 Factory/Universal Router, Uniswap V3 Factory/Universal
+  Router, USDC, Multicall3); deployment-only and provider-secret fields left blank
+- `.github/workflows/contracts.yml` (forge build/test/fuzz/snapshot/Slither) and
+  `.github/workflows/typescript.yml` (install/lint/format/typecheck/build/test/secret-scan)
+- `scripts/scan-secrets.sh` — dependency-free secret pattern scan used by CI
+- `railway.json` — minimal root builder/deploy config; per-service configuration is
+  Phase 15 work
+- `.gitignore` updated for Foundry artifacts (`out/`, `cache/`, `broadcast/`)
+
+**Requirements satisfied:** Phase 1 acceptance criteria — fresh `pnpm install` succeeds;
+every workspace package builds, typechecks, and passes its test; `forge build`/`forge
+test` succeed against pinned versions; no secrets in tracked files; no visual frontend
+implemented (`apps/web` was not created — nothing in the workspace or Railway wiring
+required it yet, and the operating instructions only permit a placeholder `apps/web` when
+that dependency exists).
+
+**Additional verified finding (recorded in `docs/research/external-addresses.md`):** the
+naive MonadScan V1 verification endpoint (`api.monadscan.com/api`) self-reports as
+deprecated in favor of Etherscan's unified V2 multichain API
+(`https://api.etherscan.io/v2/api?chainid=143`); confirmed live via direct `curl` and
+wired into `foundry.toml`'s `[etherscan]` block and `.env.example`
+(`ETHERSCAN_API_KEY`, not a separate MonadScan key).
+
+**Commands executed and results:**
+
+```
+pnpm install                    -> success, 129 packages added
+pnpm typecheck                  -> 6/6 packages pass
+pnpm build                      -> 6/6 packages pass
+pnpm test                       -> 6/6 packages pass (5 identity tests + 1 health-endpoint test)
+pnpm lint                       -> clean
+pnpm format                     -> clean (after prettier --write on docs; no content changes)
+forge build (packages/contracts) -> Compiler run successful (solc 0.8.26)
+forge test (packages/contracts)  -> 1 passed (ToolchainSmoke — OZ v5 + Permit2 remappings resolve)
+```
+
+**Unresolved risks:** none new. Phase 15 will need to replace `railway.json`'s minimal
+placeholder with real per-service configuration once Railway auth is available.
+
+**Commit hash:** recorded after this phase's commit (see `git log`).
+
+**Next phase:** Phase 2 — Chain constants, shared types, and deterministic display/execution
+hashing (Solidity + TypeScript golden vectors).

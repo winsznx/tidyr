@@ -1,0 +1,19 @@
+{
+  "name": "@tidyr/indexer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --experimental-strip-types src/**/*.test.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@tidyr/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "5.7.2",
+    "@types/node": "22.10.2"
+  }
+}
