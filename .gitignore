@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.local
+.env.deploy
+.env.*.local
+dist/
+build/
+.next/
+out/
+cache/
+cache_forge/
+broadcast/
+coverage/
+*.log
+.DS_Store
+.turbo/
+artifacts/security/*.tmp

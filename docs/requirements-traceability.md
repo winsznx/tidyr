@@ -1,0 +1,162 @@
+# TIDYR Requirements Traceability Matrix
+
+Status: Phase 0 baseline. `Status` values: `not-started`, `blocked`. Nothing is
+`implemented` yet — no code exists beyond this documentation phase. This matrix will be
+updated at the end of every phase per the operating protocol.
+
+Legend for **Component**: `SC` = smart contracts, `RT` = routing, `TR` = transaction-review,
+`EX` = execution, `API` = apps/api, `IDX` = apps/indexer, `INFRA` = Railway/deploy tooling,
+`DOC` = documentation/ERC-7730.
+
+## Section 2 — Mainnet deployment inventory
+
+| Req | Component | Status | Test plan | Evidence | Dependency |
+|---|---|---|---|---|---|
+| SweepExecutor deployed, verified, immutable | SC, INFRA | not-started | Foundry deploy script + MonadScan verify | `deployments/mainnet.json` (Phase 9) | Phase 7 security gate |
+| PancakeV2Adapter deployed | SC, INFRA | not-started | fork test + mainnet deploy | same | Phase 4/5 |
+| UniswapV3Adapter deployed | SC, INFRA | not-started | fork test + mainnet deploy | same | Phase 4/5 |
+| 5 DemoTokens deployed | SC, INFRA | not-started | unit test + mainnet deploy | same | Phase 6 |
+| DemoDistributor deployed | SC, INFRA | not-started | unit test + mainnet deploy | same | Phase 6 |
+| All contracts source-verified | INFRA | not-started | MonadScan verify command exit 0 | `deployments/mainnet.json` | Phase 9 |
+
+## Section 3 — Demo token strategy
+
+| Req | Component | Status | Test plan | Evidence | Dependency |
+|---|---|---|---|---|---|
+| DUST1–3 standard ERC-20 | SC | not-started | unit test | Phase 6 artifacts | none |
+| DUST4 ERC-20 + burn(uint256) | SC | not-started | unit test: burn reduces balance+supply | Phase 6 artifacts | none |
+| DUST5 no pool, honestly non-tradable | SC, RT | not-started | integration: quote returns no-route | Phase 10 smoke test | Phase 10 |
+| $ liquidity dynamically sized (not fixed $1 assumption) | INFRA | not-started | preflight script prints live MON value | Phase 8/10 artifacts | PRD §19.12 override applied — see conflict C-2 |
+| DemoDistributor one claim per address, fixed amount | SC | not-started | unit test: 2nd claim reverts | Phase 6 artifacts | none |
+
+## Section 4/5/19.9/19.10/19.11/19.15 — SweepExecutor + adapters + security patterns
+
+| Req | Component | Status | Test plan | Evidence | Dependency |
+|---|---|---|---|---|---|
+| `SweepPlan` without `RevocationAction[]` (§19.2 override) | SC | not-started | struct compiles, no executor-side revoke path | Phase 2 artifacts | binding override, supersedes §4 |
+| `displayManifestHash` vs `executionPlanHash` distinct (§19.3) | SC, TR | not-started | golden vectors: JS hash != Solidity hash for same logical plan; both match cross-language | Phase 2 artifacts | none |
+| Permit2 witness bound to `executionPlanHash` | SC, TR | not-started | modified plan fails; reused nonce fails; wrong spender fails | Phase 3 artifacts | Phase 2 |
+| `ReentrancyGuard` on `executeSweep` | SC | not-started | reentrancy attack unit test | Phase 4/7 artifacts | OZ v5 pinned |
+| No arbitrary external call target | SC | not-started | fuzz: unregistered adapter reverts | Phase 7 invariant | none |
+| No `delegatecall` anywhere | SC | not-started | Slither rule + manual grep | Phase 7 artifacts | none |
+| Balance-delta accounting (not trusting return values) | SC | not-started | malicious-adapter unit test | Phase 4/7 | none |
+| `forceApprove` reset after every swap | SC | not-started | unit test: approval == 0 post-swap | Phase 4/7 | OZ v5 |
+| Deadline enforcement | SC | not-started | expired-plan revert test | Phase 4 | none |
+| Nonce/replay protection | SC | not-started | reused-nonce revert test | Phase 4 | none |
+| Max action count (50) | SC | not-started | fuzz boundary test | Phase 4/7 | none |
+| Correct `allowFailure` semantics (§19.9 override) | SC | not-started | failed-optional-action preserves input; failed-required reverts whole plan | Phase 4/7 | supersedes §4 step 8g |
+| Plan-fund isolation from pre-existing balances (§19.10) | SC | not-started | invariant: forced pre-transfer doesn't get swept into new plan's remainder | Phase 4/7 | none |
+| Narrowly scoped recovery function, blocked during execution | SC | not-started | unit test: recovery reverts mid-execution | Phase 4/7 | none |
+| `Ownable2Step` adapter/ownership admin | SC | not-started | unit test: two-step transfer | Phase 4, OZ v5 pinned | none |
+| Immutable `PERMIT2`, `WMON`, `DEAD` | SC | not-started | compile-time check + test | Phase 4 | none |
+| PancakeV2Adapter targets direct V2 pairs, not a classic Router (conflict C-1) | SC | not-started | fork test against real Monad V2 pair | Phase 5 | `docs/research/external-addresses.md` |
+| UniswapV3Adapter strict path/command allowlist | SC | not-started | malicious-path / malicious-command unit test | Phase 5/7 | verified Uniswap Monad addresses |
+
+## Section 6/11/19.4 — Routing, review, ERC-7730
+
+| Req | Component | Status | Test plan | Evidence | Dependency |
+|---|---|---|---|---|---|
+| Indicative + firm quote distinction, expiry enforcement | RT | not-started | stale-quote rejection test | Phase 11 | none |
+| 3-layer review (manifest, calldata, simulation) mandatory before signing | TR | not-started | integration: any layer failing blocks signature card | Phase 11 | Tenderly Monad support confirmed |
+| ERC-7730 descriptors for chain 143 | DOC | not-started | schema validation against deployed addresses | Phase 16 | Phase 9 addresses |
+| Gas review with sanity ceilings (§19.5) | TR, EX | not-started | abnormal-estimate blocks signing test | Phase 11/14 | none |
+
+## Section 7/8/19.16 — Discovery and classification
+
+| Req | Component | Status | Test plan | Evidence | Dependency |
+|---|---|---|---|---|---|
+| Moralis discovery, chain 143 | API | not-started | integration test against live Moralis Monad endpoint | Phase 12 | Moralis Monad support confirmed |
+| Multicall3 verification of Moralis candidates | API | not-started | unit test: forged metadata rejected | Phase 12 | Multicall3 verified on-chain |
+| Capability-based `TokenAssessment` (not exclusive enum, §19.16 override) | RT, API | not-started | DUST4 asserted both tradable+burnable in one record | Phase 11/12 | supersedes §8 |
+| Metadata timeout/truncation/Unicode-normalization defenses | API | not-started | malicious-token unit test suite | Phase 12 | none |
+
+## Section 9/10/19.2 — Actions and approvals
+
+| Req | Component | Status | Test plan | Evidence | Dependency |
+|---|---|---|---|---|---|
+| SELL/CONSOLIDATE/DISCARD/BURN as SweepPlan actions | SC, TR | not-started | unit test per action type | Phase 2/4 | none |
+| REVOKE as direct wallet transaction, not plan action (§19.2) | EX, TR | not-started | integration: revoke tx is independent from executeSweep call | Phase 14 | supersedes §9/§10 |
+| TOP UP native transfer function | SC | not-started | unit test: split + dust return | Phase 4 | none |
+| MULTI-SEND | SC | not-started | unit test | Phase 4 | none |
+| EIP-5792 atomic batch only when `wallet_getCapabilities` confirms | EX | not-started | capability-gated integration test | Phase 14 | `docs/research/monad-source-map.md` §6 |
+
+## Section 12/19.6/19.7/19.8 — Execution scheduler
+
+| Req | Component | Status | Test plan | Evidence | Dependency |
+|---|---|---|---|---|---|
+| Per-wallet execution graph, concurrent across wallets | EX | not-started | 3-wallet concurrent progress test | Phase 14 | none |
+| 4-stage commitment tracking, provider-capability-gated | EX | not-started | never relabel `latest` as `finalized` — assertion test | Phase 14 | `monad-source-map.md` §2 |
+| Local tx-hash persistence before mempool visibility | EX | not-started | null-lookup-not-failure test | Phase 14 | `monad-source-map.md` §7 |
+| Reserve-aware native MON scheduling, delegation-branch (§19.8, corrected in `monad-source-map.md` §4) | EX | not-started | delegated vs undelegated reserve test | Phase 14 | EIP-7702 detection |
+| WebSocket reconnect + polling fallback, no duplicate state | EX | not-started | disconnect/duplicate-event test | Phase 14 | none |
+
+## Section 13/16 — Frontend and handoff (deferred)
+
+| Req | Component | Status | Test plan | Evidence | Dependency |
+|---|---|---|---|---|---|
+| Visual frontend | (deferred) | out-of-scope for this build | n/a | n/a | explicit user instruction: no visual frontend yet |
+| `apps/web` compile-safe placeholder only | INFRA | not-started | build passes, no product screens | Phase 15 | Railway wiring need |
+| `FRONTEND_HANDOFF.md` | DOC | not-started | completeness checklist | Phase 16 | all prior phases |
+
+## Section 14/19.18 — API
+
+| Req | Component | Status | Test plan | Evidence | Dependency |
+|---|---|---|---|---|---|
+| Hono endpoints: tokens, quote, quote/firm, simulate, report, allowances, health | API | not-started | integration test per endpoint | Phase 12 | none |
+| Zod validation on all params/body/external responses | API | not-started | malformed-input rejection test | Phase 12 | none |
+| Redis caching with chain-aware keys, explicit TTL | API | not-started | TTL expiry test | Phase 12 | Railway Redis |
+| No arbitrary RPC proxy / arbitrary URL fetch | API | not-started | negative test: blocked | Phase 12 | none |
+
+## Section 13 gap — indexer/DB (moved under 19.13/19.17 for infra binding)
+
+| Req | Component | Status | Test plan | Evidence | Dependency |
+|---|---|---|---|---|---|
+| Postgres schema + migrations | IDX, INFRA | not-started | migration up/down test | Phase 13 | Railway Postgres |
+| Idempotent finalized-event ingestion (`chainId+txHash+logIndex`) | IDX | not-started | duplicate-event test | Phase 13 | none |
+| Report reconstruction from finalized events only | IDX, API | not-started | integration: no report before finalization | Phase 13 | commitment tracking |
+
+## Section 15/19.13/19.14 — Infrastructure
+
+| Req | Component | Status | Test plan | Evidence | Dependency |
+|---|---|---|---|---|---|
+| Railway-only hosting (no Vercel) | INFRA | not-started | railway.json + service configs | Phase 15 | none |
+| `DEPLOYER_PRIVATE_KEY` never in runtime services | INFRA | not-started | env audit script | Phase 15/9 | none |
+| Health checks `/health/live`, `/health/ready` | API, IDX | not-started | integration test | Phase 15 | none |
+
+## Section 17/19.19 — Deployment sequence
+
+Tracked as the Phase 8/9/10 execution checklist; see `docs/implementation-plan.md`.
+Not restated here to avoid duplicating PRD §19.19's own ordered list, which is binding.
+
+## Section 18 — Non-functional requirements
+
+| Req | Component | Status | Test plan | Evidence | Dependency |
+|---|---|---|---|---|---|
+| Quote max age enforcement (15s/45s/60s) | RT, TR | not-started | timer-based rejection test | Phase 11 | none |
+| Token metadata call timeout (3s) | API | not-started | `Promise.race` timeout test | Phase 12 | none |
+| Max 50 actions / 100-call multicall batch | SC, API | not-started | boundary tests | Phase 4/12 | none |
+| Zero retained user funds post-execution | SC | not-started | invariant test | Phase 7 | none |
+
+---
+
+## Contradiction / conflict log
+
+| ID | Section(s) in conflict | Nature of conflict | Resolution | Status |
+|---|---|---|---|---|
+| C-1 | §4 `PancakeV2Adapter` vs live Monad deployment | PRD assumes a classic PancakeSwap Router02 (`swapExactTokensForTokens`) exists on Monad. Verified via official `@pancakeswap/v2-sdk` and `@pancakeswap/universal-router-sdk` packages: PancakeSwap only deploys a bare V2 `Factory` + a `Universal Router` on Monad — no classic router. | Adapter interacts directly with `IPancakePair` (reserves + `swap()`, constant-product math) instead of a nonexistent router. Preserves the exact product capability (direct, auditable V2 swap path). Documented in `docs/research/external-addresses.md`. | resolved-in-docs, pending contract implementation |
+| C-2 | §3 "$1 per token" vs §19.12 "dynamically sized" | §3 hardcodes an illustrative $1/2-WMON example; §19.12 (binding) requires the deployment script to compute live value and require explicit confirmation, never assume a fixed MON/USD price. | §19.12 governs. Liquidity script parameterized by `DEMO_WMON_PER_POOL`/`DEMO_TOKEN_PER_POOL` env vars, prints live fiat estimate, requires confirmation. | resolved — §19 binding, no code conflict |
+| C-3 | §4/§9 `RevokeAction` vs §19.2 | §4/§9 encode revocations as executor-side plan actions; §19.2 proves this cannot work (executor can only alter its own allowance mapping, not the EOA's). | §19.2 governs. `RevokeAction[]` removed from `SweepPlan`; revocations are direct EOA transactions, optionally EIP-5792-batched. | resolved — §19 binding |
+| C-4 | §11 single "manifest hash" vs §19.3 two hashes | §11 implies one `manifestHash` shared between display JSON and Solidity struct; RFC 8785 JSON and ABI encoding are different byte representations and cannot be expected to hash identically. | §19.3 governs. `displayManifestHash` (frontend/audit trail) and `executionPlanHash` (contract-validated, Permit2-witness-bound) are distinct fields with golden cross-language test vectors. | resolved — §19 binding |
+| C-5 | §10/§12 implied "collect all signatures then broadcast" vs actual wallet behavior | §10/§12 describe collecting signed transactions ahead of broadcast for every wallet; ordinary injected wallets sign-and-send atomically via `eth_sendTransaction` and do not return a raw signed tx for later broadcast. | Documented in `docs/research/monad-source-map.md` §6. TIDYR collects EIP-712 signatures (Permit2/witness) ahead of time — that part is genuinely separable — but each wallet's on-chain transactions are requested and sent as they become ready, not pre-collected as raw signed blobs, except where `wallet_getCapabilities` proves EIP-5792 atomic batch support. | resolved — no PRD override needed, clarifies an implementation detail the PRD left implicit |
+| C-6 | §19.8 flat "10 MON reserve" framing vs actual Monad reserve-balance rule | §19.8 describes the reserve rule as applying generally; the actual rule (Monad's own EIP-7702 docs) applies the hard 10 MON floor specifically to *delegated* EOAs, with a different (softer) carve-out for undelegated EOAs' first transaction in a rolling block window. | Documented precisely in `docs/research/monad-source-map.md` §4. Execution scheduler branches its safe-native-sweep logic on delegation status rather than applying one flat rule. | resolved — refines a PRD approximation with verified protocol detail |
+
+## Open dependencies blocking later phases
+
+- `DEPLOYER_PRIVATE_KEY` must be supplied locally by the user before Phase 9 (mainnet
+  broadcast) — never requested in chat, per operating rules.
+- `MORALIS_API_KEY`, `TENDERLY_ACCOUNT`/`PROJECT`/`ACCESS_KEY`, `ZEROX_API_KEY` must be
+  supplied before Phase 11/12 integration tests can run against live providers (unit tests
+  can proceed with fixtures beforehand, clearly labeled as fixtures).
+- Railway authentication (via the `railway` MCP server) required before Phase 15 can
+  provision real services; configuration work can proceed unauthenticated and be applied
+  once authorized.
