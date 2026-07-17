@@ -34,7 +34,11 @@ jobs:
         run: forge build --sizes
 
       - name: Test (unit + fuzz + invariant)
-        run: forge test -vvv --fuzz-runs 2048
+        run: forge test -vvv --fuzz-runs 2048 --no-match-path "*.fork.t.sol"
+
+      - name: Test (mainnet fork)
+        run: forge test -vvv --match-path "*.fork.t.sol"
+        continue-on-error: true # network-dependent; failure here should not block the deterministic suite
 
       - name: Gas snapshot
         run: forge snapshot --check || forge snapshot

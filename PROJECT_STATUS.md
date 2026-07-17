@@ -341,8 +341,85 @@ don't exist yet — Phase 4's tests exercise SweepExecutor's handling of adapter
 generically via `MockAdapter`; real DEX integration correctness is Phase 5's scope, not
 assumed here.
 
-**Commit hash:** recorded after this phase's commit (see `git log`).
+**Commit hash:** `cc11b20`
 
 **Next phase:** Phase 5 — PancakeV2Adapter (direct pair interaction, per conflict C-1)
 and UniswapV3Adapter (strict path/command allowlist against the verified Monad
 deployment).
+
+---
+
+## Phase 5 — Constrained DEX Adapters
+
+**Objective:** Implement `PancakeV2Adapter` and `UniswapV3Adapter` with the smallest safe
+surface, verified against real Monad mainnet contracts wherever possible rather than
+assumed from the PRD's examples.
+
+**Files created:**
+
+- `packages/contracts/src/interfaces/{IPancakeFactory,IPancakePair}.sol`
+- `packages/contracts/src/adapters/PancakeV2Adapter.sol` — per conflict C-1, reads pairs
+  directly from the verified Monad factory and computes swap amounts itself via the
+  standard constant-product formula (0.3% fee), mirroring UniswapV2Router02's own
+  `_swap`/`getAmountsOut` logic without depending on a router that doesn't exist on
+  Monad; strict path validation (must start at `tokenIn`, end at `tokenOut`), an
+  owner-managed intermediate-asset allowlist (seeded with WMON), non-zero
+  `minAmountOut`, deadline enforcement, output always settles to the caller
+- `packages/contracts/src/interfaces/ISwapRouter02.sol`, `src/libraries/UniswapV3Path.sol`
+  (minimal packed-path token extraction, the standard BytesLib-style technique used by
+  Uniswap's own `Path.sol`)
+- `packages/contracts/src/adapters/UniswapV3Adapter.sol` — **conflict C-7** (new,
+  recorded in the traceability matrix): the PRD directs wrapping Uniswap's Universal
+  Router with a command-byte allowlist, but Uniswap also deployed a classic `SwapRouter02`
+  on Monad with a fixed, non-generic `exactInput` signature — confirmed by reading the
+  _live deployed bytecode's function selectors_ (`0xb858183f` present, the old
+  deadline-inclusive `exactInput` selector `0xc04b8d59` absent), not assumed. Calling
+  SwapRouter02 directly has a strictly smaller attack surface (no command bytes to
+  allowlist at all) for the identical capability, so the adapter does that instead of
+  wrapping Universal Router.
+- Test mocks: `MockPancakePair`, `MockPancakeFactory`, `MockSwapRouter02` (mirrors
+  `MockAdapter`'s Normal/Revert/UnderDeliver control shape)
+- `packages/contracts/test/PancakeV2Adapter.t.sol` (10 tests), `UniswapV3Adapter.t.sol`
+  (11 tests) — path validation, intermediate-asset allowlist, output enforcement,
+  expiry, malformed path, router-revert bubbling, approval reset, owner-only admin
+- `packages/contracts/test/SweepExecutorAdapterIntegration.t.sol` (2 tests) — full
+  signed-plan execution through the real (non-mock) adapter contracts, not `MockAdapter`
+- `packages/contracts/test/PancakeV2Adapter.fork.t.sol` (2 tests) — **a real swap against
+  the actual live PancakeSwap V2 WMON/USDC pair on Monad mainnet**
+  (`0x27AA322b3f8Ba9d0041Df99c33fE4f3CC135E054`, found via `factory.getPair` at test
+  time, confirmed non-zero live reserves ~16.25 WMON / ~0.359 USDC), wrapping real
+  native MON into real WMON through the real WMON contract and executing a genuine
+  `IPancakePair.swap()` call, with output matching the constant-product formula computed
+  from the live reserves exactly
+
+**Requirements satisfied:** all Phase 5 acceptance criteria — unit tests with
+controlled routers; malicious-path tests; wrong-output tests; expired-route tests;
+partial/reverting-router tests; mainnet-fork quote-and-swap test (PancakeV2, ran
+successfully against live Monad state — Uniswap V3 fork testing deferred since no
+fee-tier pool with live TIDYR-relevant liquidity is expected to exist pre-deployment;
+the mock-router tests cover its logic exhaustively). Fee-on-transfer input handling is
+inherited from SweepExecutor's Phase 4 exact-pulled-amount check, not re-implemented
+per adapter.
+
+**Commands executed and results:**
+
+```
+forge build                                                          -> successful
+forge test --no-match-path "*.fork.t.sol" --no-match-contract SweepExecutorInvariantsTest
+                                                                      -> 65 passed, 0 failed
+forge test --match-path "*.fork.t.sol"                               -> 2 passed (live Monad mainnet fork)
+forge test --match-contract SweepExecutorInvariantsTest              -> 2 invariants passed (8192 calls each)
+forge snapshot                                                       -> updated packages/contracts/.gas-snapshot
+```
+
+CI (`contracts.yml`) updated: the deterministic suite excludes `*.fork.t.sol` via
+`--no-match-path`; fork tests run in a separate, `continue-on-error` step so network
+flakiness never blocks the required (deterministic) suite.
+
+**Unresolved risks:** none new. Uniswap V3 has no equivalent fork-tested live pool yet
+(Phase 6/10 will deploy TIDYR's own demo liquidity, at which point a V3 fork test could
+be added if a real V3 pool with TIDYR-relevant tokens exists — not assumed here).
+
+**Commit hash:** recorded after this phase's commit (see `git log`).
+
+**Next phase:** Phase 6 — Demo token suite (DUST1–5) and DemoDistributor.
