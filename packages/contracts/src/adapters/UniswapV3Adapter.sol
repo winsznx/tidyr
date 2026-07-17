@@ -72,10 +72,14 @@ contract UniswapV3Adapter is IAdapter, Ownable2Step {
     }
 
     /// @param routeData the raw Uniswap V3 packed path bytes (token|fee|token|fee|token...)
-    function swap(address tokenIn, uint256 amountIn, address tokenOut, uint256 minAmountOut, uint256 deadline, bytes calldata routeData)
-        external
-        returns (uint256 amountOut)
-    {
+    function swap(
+        address tokenIn,
+        uint256 amountIn,
+        address tokenOut,
+        uint256 minAmountOut,
+        uint256 deadline,
+        bytes calldata routeData
+    ) external returns (uint256 amountOut) {
         if (block.timestamp > deadline) revert RouteExpired();
         if (minAmountOut == 0) revert ZeroMinAmountOut();
 
@@ -87,10 +91,7 @@ contract UniswapV3Adapter is IAdapter, Ownable2Step {
 
         amountOut = ROUTER.exactInput(
             ISwapRouter02.ExactInputParams({
-                path: path,
-                recipient: msg.sender,
-                amountIn: amountIn,
-                amountOutMinimum: minAmountOut
+                path: path, recipient: msg.sender, amountIn: amountIn, amountOutMinimum: minAmountOut
             })
         );
 

@@ -37,8 +37,9 @@ contract PancakeV2AdapterForkTest is Test {
     function test_realSwap_wmonToUsdc_succeeds() public {
         address pair = IPancakeFactoryView(FACTORY).getPair(WMON, USDC);
         (uint112 reserve0, uint112 reserve1,) = IPancakePair(pair).getReserves();
-        (uint256 reserveWmon, uint256 reserveUsdc) =
-            IPancakePair(pair).token0() == WMON ? (uint256(reserve0), uint256(reserve1)) : (uint256(reserve1), uint256(reserve0));
+        (uint256 reserveWmon, uint256 reserveUsdc) = IPancakePair(pair).token0() == WMON
+            ? (uint256(reserve0), uint256(reserve1))
+            : (uint256(reserve1), uint256(reserve0));
 
         // Small relative to real (thin) live liquidity, to keep slippage realistic.
         uint256 amountIn = reserveWmon / 100;

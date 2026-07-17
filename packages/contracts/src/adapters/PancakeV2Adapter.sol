@@ -76,10 +76,14 @@ contract PancakeV2Adapter is IAdapter, Ownable2Step {
     }
 
     /// @param routeData ABI-encoded `address[] path`, e.g. [DUST1, WMON] or [DUST1, WMON, USDC]
-    function swap(address tokenIn, uint256 amountIn, address tokenOut, uint256 minAmountOut, uint256 deadline, bytes calldata routeData)
-        external
-        returns (uint256 amountOut)
-    {
+    function swap(
+        address tokenIn,
+        uint256 amountIn,
+        address tokenOut,
+        uint256 minAmountOut,
+        uint256 deadline,
+        bytes calldata routeData
+    ) external returns (uint256 amountOut) {
         if (block.timestamp > deadline) revert RouteExpired();
         if (minAmountOut == 0) revert ZeroMinAmountOut();
 
@@ -108,7 +112,8 @@ contract PancakeV2Adapter is IAdapter, Ownable2Step {
             (address input, address output) = (path[i], path[i + 1]);
             (address token0,) = _sortTokens(input, output);
             uint256 amountOut = amounts[i + 1];
-            (uint256 amount0Out, uint256 amount1Out) = input == token0 ? (uint256(0), amountOut) : (amountOut, uint256(0));
+            (uint256 amount0Out, uint256 amount1Out) =
+                input == token0 ? (uint256(0), amountOut) : (amountOut, uint256(0));
             address recipient = i < path.length - 2 ? _pairFor(output, path[i + 2]) : to;
             IPancakePair(_pairFor(input, output)).swap(amount0Out, amount1Out, recipient, new bytes(0));
         }
@@ -123,7 +128,11 @@ contract PancakeV2Adapter is IAdapter, Ownable2Step {
         }
     }
 
-    function _getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut) private pure returns (uint256 amountOut) {
+    function _getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut)
+        private
+        pure
+        returns (uint256 amountOut)
+    {
         if (amountIn == 0) revert InsufficientInputAmount();
         if (reserveIn == 0 || reserveOut == 0) revert InsufficientLiquidity();
         uint256 amountInWithFee = amountIn * 997;
@@ -136,7 +145,8 @@ contract PancakeV2Adapter is IAdapter, Ownable2Step {
         address pair = _pairFor(tokenA, tokenB);
         (address token0,) = _sortTokens(tokenA, tokenB);
         (uint112 reserve0, uint112 reserve1,) = IPancakePair(pair).getReserves();
-        (reserveA, reserveB) = tokenA == token0 ? (uint256(reserve0), uint256(reserve1)) : (uint256(reserve1), uint256(reserve0));
+        (reserveA, reserveB) =
+            tokenA == token0 ? (uint256(reserve0), uint256(reserve1)) : (uint256(reserve1), uint256(reserve0));
     }
 
     function _pairFor(address tokenA, address tokenB) private view returns (address pair) {

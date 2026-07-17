@@ -41,7 +41,9 @@ contract UniswapV3AdapterTest is Test {
     function test_directPath_swapSucceeds() public {
         uint256 amountIn = 100 ether;
         dust1.approve(address(adapter), amountIn);
-        uint256 out = adapter.swap(address(dust1), amountIn, address(usdc), 1, block.timestamp + 100, _path(address(dust1), address(usdc)));
+        uint256 out = adapter.swap(
+            address(dust1), amountIn, address(usdc), 1, block.timestamp + 100, _path(address(dust1), address(usdc))
+        );
         assertEq(out, amountIn);
         assertEq(usdc.balanceOf(address(this)), amountIn);
     }
@@ -50,7 +52,12 @@ contract UniswapV3AdapterTest is Test {
         uint256 amountIn = 50 ether;
         dust1.approve(address(adapter), amountIn);
         uint256 out = adapter.swap(
-            address(dust1), amountIn, address(usdc), 1, block.timestamp + 100, _path3(address(dust1), address(wmon), address(usdc))
+            address(dust1),
+            amountIn,
+            address(usdc),
+            1,
+            block.timestamp + 100,
+            _path3(address(dust1), address(wmon), address(usdc))
         );
         assertEq(out, amountIn);
         assertEq(usdc.balanceOf(address(this)), amountIn);
@@ -59,38 +66,55 @@ contract UniswapV3AdapterTest is Test {
     function test_pathTokenInMismatch_reverts() public {
         dust1.approve(address(adapter), 1 ether);
         vm.expectRevert(UniswapV3Adapter.PathTokenInMismatch.selector);
-        adapter.swap(address(dust1), 1 ether, address(usdc), 1, block.timestamp + 100, _path(address(wmon), address(usdc)));
+        adapter.swap(
+            address(dust1), 1 ether, address(usdc), 1, block.timestamp + 100, _path(address(wmon), address(usdc))
+        );
     }
 
     function test_pathTokenOutMismatch_reverts() public {
         dust1.approve(address(adapter), 1 ether);
         vm.expectRevert(UniswapV3Adapter.PathTokenOutMismatch.selector);
-        adapter.swap(address(dust1), 1 ether, address(usdc), 1, block.timestamp + 100, _path(address(dust1), address(wmon)));
+        adapter.swap(
+            address(dust1), 1 ether, address(usdc), 1, block.timestamp + 100, _path(address(dust1), address(wmon))
+        );
     }
 
     function test_unallowedIntermediateAsset_reverts() public {
         dust1.approve(address(adapter), 1 ether);
         vm.expectRevert(abi.encodeWithSelector(UniswapV3Adapter.IntermediateAssetNotAllowed.selector, address(rogue)));
-        adapter.swap(address(dust1), 1 ether, address(usdc), 1, block.timestamp + 100, _path3(address(dust1), address(rogue), address(usdc)));
+        adapter.swap(
+            address(dust1),
+            1 ether,
+            address(usdc),
+            1,
+            block.timestamp + 100,
+            _path3(address(dust1), address(rogue), address(usdc))
+        );
     }
 
     function test_expiredDeadline_reverts() public {
         dust1.approve(address(adapter), 1 ether);
         vm.expectRevert(UniswapV3Adapter.RouteExpired.selector);
-        adapter.swap(address(dust1), 1 ether, address(usdc), 1, block.timestamp - 1, _path(address(dust1), address(usdc)));
+        adapter.swap(
+            address(dust1), 1 ether, address(usdc), 1, block.timestamp - 1, _path(address(dust1), address(usdc))
+        );
     }
 
     function test_zeroMinAmountOut_reverts() public {
         dust1.approve(address(adapter), 1 ether);
         vm.expectRevert(UniswapV3Adapter.ZeroMinAmountOut.selector);
-        adapter.swap(address(dust1), 1 ether, address(usdc), 0, block.timestamp + 100, _path(address(dust1), address(usdc)));
+        adapter.swap(
+            address(dust1), 1 ether, address(usdc), 0, block.timestamp + 100, _path(address(dust1), address(usdc))
+        );
     }
 
     function test_routerReverts_bubblesRevert() public {
         router.setMode(MockSwapRouter02.Mode.REVERT);
         dust1.approve(address(adapter), 1 ether);
         vm.expectRevert("MockSwapRouter02: forced revert");
-        adapter.swap(address(dust1), 1 ether, address(usdc), 1, block.timestamp + 100, _path(address(dust1), address(usdc)));
+        adapter.swap(
+            address(dust1), 1 ether, address(usdc), 1, block.timestamp + 100, _path(address(dust1), address(usdc))
+        );
     }
 
     function test_malformedPath_reverts() public {
@@ -136,7 +160,9 @@ contract UniswapV3AdapterTest is Test {
     function test_approvalResetAfterSwap() public {
         uint256 amountIn = 10 ether;
         dust1.approve(address(adapter), amountIn);
-        adapter.swap(address(dust1), amountIn, address(usdc), 1, block.timestamp + 100, _path(address(dust1), address(usdc)));
+        adapter.swap(
+            address(dust1), amountIn, address(usdc), 1, block.timestamp + 100, _path(address(dust1), address(usdc))
+        );
         assertEq(dust1.allowance(address(adapter), address(router)), 0);
     }
 }

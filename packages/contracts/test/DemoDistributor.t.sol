@@ -25,8 +25,13 @@ contract DemoDistributorTest is Test {
         dust4 = new BurnableDemoToken("TIDYR Dust 4", "DUST4");
         dust5 = new DemoToken("TIDYR Dust 5", "DUST5");
 
-        IERC20[5] memory tokens =
-            [IERC20(address(dust1)), IERC20(address(dust2)), IERC20(address(dust3)), IERC20(address(dust4)), IERC20(address(dust5))];
+        IERC20[5] memory tokens = [
+            IERC20(address(dust1)),
+            IERC20(address(dust2)),
+            IERC20(address(dust3)),
+            IERC20(address(dust4)),
+            IERC20(address(dust5))
+        ];
         distributor = new DemoDistributor(tokens, owner);
 
         dust1.transfer(address(distributor), 1_000 ether);
@@ -114,8 +119,13 @@ contract DemoDistributorTest is Test {
     }
 
     function test_constructor_rejectsZeroAddressToken() public {
-        IERC20[5] memory tokens =
-            [IERC20(address(dust1)), IERC20(address(0)), IERC20(address(dust3)), IERC20(address(dust4)), IERC20(address(dust5))];
+        IERC20[5] memory tokens = [
+            IERC20(address(dust1)),
+            IERC20(address(0)),
+            IERC20(address(dust3)),
+            IERC20(address(dust4)),
+            IERC20(address(dust5))
+        ];
         vm.expectRevert(DemoDistributor.ZeroAddress.selector);
         new DemoDistributor(tokens, owner);
     }

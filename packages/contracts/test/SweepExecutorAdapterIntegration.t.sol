@@ -89,7 +89,12 @@ contract SweepExecutorAdapterIntegrationTest is Test {
         bytes32 typeHash = keccak256(abi.encodePacked(PERMIT_BATCH_WITNESS_STUB, TidyrWitness.WITNESS_TYPE_STRING));
         bytes32 structHash = keccak256(
             abi.encode(
-                typeHash, keccak256(abi.encodePacked(tokenPermissionHashes)), address(executor), plan.nonce, plan.deadline, witness
+                typeHash,
+                keccak256(abi.encodePacked(tokenPermissionHashes)),
+                address(executor),
+                plan.nonce,
+                plan.deadline,
+                witness
             )
         );
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", permit2.DOMAIN_SEPARATOR(), structHash));

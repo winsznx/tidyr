@@ -112,9 +112,7 @@ contract Permit2WitnessTest is Test {
 
         executionPlanHash = SweepPlanLib.hashPlan(plan, block.chainid, address(this));
         permit = ISignatureTransfer.PermitBatchTransferFrom({
-            permitted: permitted,
-            nonce: permitNonce,
-            deadline: plan.deadline
+            permitted: permitted, nonce: permitNonce, deadline: plan.deadline
         });
     }
 
@@ -230,7 +228,9 @@ contract Permit2WitnessTest is Test {
         // so the recomputed struct hash (and therefore the signature check) fails.
         WrongSpenderCaller attacker = new WrongSpenderCaller(permit2);
         vm.expectRevert(); // SignatureVerification.InvalidSigner
-        attacker.pull(permit, _transferDetails(permit, recipient), owner, witness, TidyrWitness.WITNESS_TYPE_STRING, sig);
+        attacker.pull(
+            permit, _transferDetails(permit, recipient), owner, witness, TidyrWitness.WITNESS_TYPE_STRING, sig
+        );
     }
 
     function test_excessivePull_fails() public {
