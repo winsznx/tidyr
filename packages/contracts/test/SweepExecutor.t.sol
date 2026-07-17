@@ -80,8 +80,7 @@ contract SweepExecutorTest is Test {
         (address[] memory tokens, uint256[] memory amounts) = SweepPlanLib.aggregateTokenAmounts(plan);
         bytes32[] memory tokenPermissionHashes = new bytes32[](tokens.length);
         for (uint256 i = 0; i < tokens.length; i++) {
-            tokenPermissionHashes[i] =
-                keccak256(abi.encode(TOKEN_PERMISSIONS_TYPEHASH, tokens[i], amounts[i]));
+            tokenPermissionHashes[i] = keccak256(abi.encode(TOKEN_PERMISSIONS_TYPEHASH, tokens[i], amounts[i]));
         }
 
         bytes32 executionPlanHash = SweepPlanLib.hashPlan(plan, block.chainid, address(executor));
@@ -487,6 +486,60 @@ contract SweepExecutorTest is Test {
         executor.executeSweep(plan, sig);
 
         assertFalse(executor.allowedAdapters(multicall3));
+    }
+
+    /// @dev Codex addendum audit finding CA-01 (P1): the prior test only proved the
+    /// *default* (never-registered) state was rejected - it did not prove that an owner
+    /// could not register Multicall3 in the first place, after which a permanent freeze
+    /// would have blessed it forever. This directly reproduces and closes that gap:
+    /// `registerAdapter` itself must revert for Multicall3's real, verified address.
+    function test_registerAdapter_rejectsMulticall3Explicitly() public {
+        address multicall3 = executor.MULTICALL3_ADDRESS();
+
+        vm.prank(executorOwner);
+        vm.expectRevert(SweepExecutor.AdapterIsMulticall3.selector);
+        executor.registerAdapter(multicall3);
+
+        assertFalse(executor.allowedAdapters(multicall3));
+    }
+
+    /// @dev CA-01/CA-02: freezing SweepExecutor must not be possible while a currently
+    /// registered adapter's own configuration remains mutable - otherwise a "frozen"
+    /// executor could still route through an adapter whose routing surface (e.g.
+    /// intermediate-asset allowlist) an attacker or compromised adapter-owner can still
+    /// change after the fact.
+    function test_freezeConfiguration_revertsIfRegisteredAdapterNotFrozen() public {
+        adapter.setFrozen(false);
+
+        vm.prank(executorOwner);
+        vm.expectRevert(abi.encodeWithSelector(SweepExecutor.RegisteredAdapterNotFrozen.selector, address(adapter)));
+        executor.freezeConfiguration();
+
+        assertFalse(executor.configurationFrozen());
+    }
+
+    function test_freezeConfiguration_succeedsWhenAllRegisteredAdaptersFrozen() public {
+        adapter.setFrozen(true);
+
+        vm.prank(executorOwner);
+        executor.freezeConfiguration();
+
+        assertTrue(executor.configurationFrozen());
+    }
+
+    /// @dev An adapter that was registered and later removed no longer needs to be
+    /// frozen itself - it is unreachable, so its own mutability is no longer relevant
+    /// to the executor's security boundary.
+    function test_freezeConfiguration_ignoresRemovedAdapters() public {
+        adapter.setFrozen(false);
+
+        vm.prank(executorOwner);
+        executor.removeAdapter(address(adapter));
+
+        vm.prank(executorOwner);
+        executor.freezeConfiguration();
+
+        assertTrue(executor.configurationFrozen());
     }
 
     function test_maliciousReentrantAdapter_reverts() public {

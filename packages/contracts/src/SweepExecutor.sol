@@ -11,6 +11,7 @@ import {TidyrWitness} from "./libraries/TidyrWitness.sol";
 import {IAdapter} from "./interfaces/IAdapter.sol";
 import {IBurnable} from "./interfaces/IBurnable.sol";
 import {IWMON} from "./interfaces/IWMON.sol";
+import {IFreezableAdapter} from "./interfaces/IFreezableAdapter.sol";
 
 /// @title SweepExecutor
 /// @notice TIDYR's core execution contract. Pulls exactly the tokens a signed plan
@@ -39,9 +40,21 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
     /// @dev Matches packages/shared/src/actions.ts::MON_NATIVE_SENTINEL exactly.
     address public constant MON_NATIVE_SENTINEL = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
+    /// @dev Verified live on Monad mainnet (docs/research/external-addresses.md). A
+    /// read-only batched-call helper that accepts arbitrary target/calldata - explicitly
+    /// and permanently barred from ever being registered as an adapter, regardless of
+    /// owner action, per Codex addendum audit finding CA-01.
+    address public constant MULTICALL3_ADDRESS = 0xcA11bde05977b3631167028862bE2a173976CA11;
+
     mapping(address => uint256) public nonces;
     mapping(address => bool) public allowedAdapters;
     mapping(address => bool) public allowedOutputTokens;
+
+    /// @dev Enumerable registry of every address ever registered via `registerAdapter`,
+    /// so `freezeConfiguration` can require each currently-allowed adapter to itself be
+    /// frozen (CA-01/CA-02) - `allowedAdapters` alone cannot be iterated.
+    address[] private _registeredAdapterList;
+    mapping(address => bool) private _everRegisteredAsAdapter;
 
     /// @dev Security-addendum hardening (pre-Phase-7 review): once true, the adapter
     /// and output-token registries can never change again. Mitigates a compromised- or
@@ -69,7 +82,11 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
     );
 
     event ActionFailed(
-        bytes32 indexed executionPlanHash, uint256 indexed actionIndex, uint8 indexed actionType, address token, bytes32 reasonHash
+        bytes32 indexed executionPlanHash,
+        uint256 indexed actionIndex,
+        uint8 indexed actionType,
+        address token,
+        bytes32 reasonHash
     );
 
     event SweepCompleted(
@@ -95,6 +112,8 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
     error NativeTransferFailed();
     error ZeroAddress();
     error ConfigurationIsFrozen();
+    error AdapterIsMulticall3();
+    error RegisteredAdapterNotFrozen(address adapter);
 
     constructor(address permit2_, address wmon_, address initialOwner_) Ownable(initialOwner_) {
         if (permit2_ == address(0) || wmon_ == address(0) || initialOwner_ == address(0)) revert ZeroAddress();
@@ -117,7 +136,12 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
 
     function registerAdapter(address adapter) external onlyOwner whenNotFrozen {
         if (adapter == address(0)) revert ZeroAddress();
+        if (adapter == MULTICALL3_ADDRESS) revert AdapterIsMulticall3();
         allowedAdapters[adapter] = true;
+        if (!_everRegisteredAsAdapter[adapter]) {
+            _everRegisteredAsAdapter[adapter] = true;
+            _registeredAdapterList.push(adapter);
+        }
         emit AdapterRegistered(adapter);
     }
 
@@ -140,7 +164,22 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
     /// @notice Permanently freezes the adapter and output-token registries. Irreversible
     /// by design - there is no `unfreeze`. Recovery of stray balances remains available
     /// afterward since it is unrelated to the execution security boundary.
+    /// @dev Requires every currently-allowed adapter to itself already report
+    /// `configurationFrozen() == true` (CA-01/CA-02): a "frozen" SweepExecutor whose
+    /// registered adapters can still have their own routing surface (e.g. intermediate
+    /// asset allowlist) changed by their own owner would not actually establish the
+    /// security boundary the freeze is meant to guarantee. Adapters that were registered
+    /// and later removed (`allowedAdapters[a] == false`) are skipped - they are no
+    /// longer reachable, so their own configuration state is no longer relevant.
     function freezeConfiguration() external onlyOwner {
+        uint256 len = _registeredAdapterList.length;
+        for (uint256 i = 0; i < len; i++) {
+            address adapter = _registeredAdapterList[i];
+            if (!allowedAdapters[adapter]) continue;
+            if (!IFreezableAdapter(adapter).configurationFrozen()) {
+                revert RegisteredAdapterNotFrozen(adapter);
+            }
+        }
         configurationFrozen = true;
         emit ConfigurationFrozen();
     }
@@ -220,7 +259,8 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
         uint256[] memory amounts,
         bytes calldata signature
     ) private {
-        ISignatureTransfer.TokenPermissions[] memory permitted = new ISignatureTransfer.TokenPermissions[](tokens.length);
+        ISignatureTransfer.TokenPermissions[] memory permitted =
+            new ISignatureTransfer.TokenPermissions[](tokens.length);
         ISignatureTransfer.SignatureTransferDetails[] memory details =
             new ISignatureTransfer.SignatureTransferDetails[](tokens.length);
         for (uint256 i = 0; i < tokens.length; i++) {
@@ -228,8 +268,9 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
             details[i] = ISignatureTransfer.SignatureTransferDetails({to: address(this), requestedAmount: amounts[i]});
         }
 
-        ISignatureTransfer.PermitBatchTransferFrom memory permit =
-            ISignatureTransfer.PermitBatchTransferFrom({permitted: permitted, nonce: plan.nonce, deadline: plan.deadline});
+        ISignatureTransfer.PermitBatchTransferFrom memory permit = ISignatureTransfer.PermitBatchTransferFrom({
+            permitted: permitted, nonce: plan.nonce, deadline: plan.deadline
+        });
 
         bytes32 witness = TidyrWitness.hashWitness(executionPlanHash);
         PERMIT2.permitWitnessTransferFrom(
@@ -254,7 +295,14 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
             SweepPlanLib.TransferAction calldata action = plan.transfers[i];
             IERC20(action.token).safeTransfer(action.to, action.amount);
             emit ActionExecuted(
-                executionPlanHash, actionIndex, uint8(ActionType.TRANSFER), action.token, action.token, action.amount, action.amount, action.to
+                executionPlanHash,
+                actionIndex,
+                uint8(ActionType.TRANSFER),
+                action.token,
+                action.token,
+                action.amount,
+                action.amount,
+                action.to
             );
             successCount++;
             actionIndex++;
@@ -264,7 +312,14 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
             SweepPlanLib.DiscardAction calldata action = plan.discards[i];
             IERC20(action.token).safeTransfer(DEAD, action.amount);
             emit ActionExecuted(
-                executionPlanHash, actionIndex, uint8(ActionType.DISCARD), action.token, action.token, action.amount, action.amount, DEAD
+                executionPlanHash,
+                actionIndex,
+                uint8(ActionType.DISCARD),
+                action.token,
+                action.token,
+                action.amount,
+                action.amount,
+                DEAD
             );
             successCount++;
             actionIndex++;
@@ -274,7 +329,14 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
             SweepPlanLib.BurnAction calldata action = plan.burns[i];
             IBurnable(action.token).burn(action.amount);
             emit ActionExecuted(
-                executionPlanHash, actionIndex, uint8(ActionType.BURN), action.token, action.token, action.amount, action.amount, address(0)
+                executionPlanHash,
+                actionIndex,
+                uint8(ActionType.BURN),
+                action.token,
+                action.token,
+                action.amount,
+                action.amount,
+                address(0)
             );
             successCount++;
             actionIndex++;
@@ -296,15 +358,26 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
         IERC20(action.tokenIn).forceApprove(action.adapter, action.amountIn);
         uint256 before = IERC20(settlementToken).balanceOf(address(this));
 
-        try IAdapter(action.adapter).swap(action.tokenIn, action.amountIn, settlementToken, action.minAmountOut, deadline, action.routeData)
-        returns (uint256) {
+        try IAdapter(action.adapter)
+            .swap(
+                action.tokenIn, action.amountIn, settlementToken, action.minAmountOut, deadline, action.routeData
+            ) returns (
+            uint256
+        ) {
             uint256 actualOut = IERC20(settlementToken).balanceOf(address(this)) - before;
             IERC20(action.tokenIn).forceApprove(action.adapter, 0);
             if (actualOut < action.minAmountOut) {
                 revert AdapterInvariantViolation(action.adapter, actualOut, action.minAmountOut);
             }
             emit ActionExecuted(
-                executionPlanHash, actionIndex, uint8(ActionType.SWAP), action.tokenIn, settlementToken, action.amountIn, actualOut, address(this)
+                executionPlanHash,
+                actionIndex,
+                uint8(ActionType.SWAP),
+                action.tokenIn,
+                settlementToken,
+                action.amountIn,
+                actualOut,
+                address(this)
             );
             return true;
         } catch (bytes memory reason) {
@@ -326,7 +399,8 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
         uint256 nativeBaseline
     ) private returns (uint256 outputAmount) {
         if (plan.outputToken == MON_NATIVE_SENTINEL) {
-            uint256 wmonDelta = IERC20(settlementToken).balanceOf(address(this)) - settlementBaseline;
+            uint256 wmonDelta =
+                IERC20(settlementToken).balanceOf(address(this)) - settlementBaseline;
             if (wmonDelta > 0) {
                 WMON.withdraw(wmonDelta);
             }

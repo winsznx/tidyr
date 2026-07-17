@@ -21,8 +21,18 @@ contract MockAdapter is IAdapter {
     uint256 public outputNumerator = 1;
     uint256 public outputDenominator = 1;
 
+    /// @dev Implements IFreezableAdapter so SweepExecutor.freezeConfiguration's
+    /// adapter-readiness check (CA-01/CA-02) can be exercised in tests. Defaults to
+    /// true (a real adapter would normally be frozen before the executor freezes);
+    /// tests that need to prove the revert-when-not-frozen path call `setFrozen(false)`.
+    bool public configurationFrozen = true;
+
     function setMode(Mode m) external {
         mode = m;
+    }
+
+    function setFrozen(bool frozen) external {
+        configurationFrozen = frozen;
     }
 
     function setRatio(uint256 numerator, uint256 denominator) external {
