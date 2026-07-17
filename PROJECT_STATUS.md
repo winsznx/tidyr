@@ -614,7 +614,9 @@ executor's freeze permanently "blessed" it.
 `test_freezeConfiguration_ignoresRemovedAdapters` — each directly reproduces the
 audit's stated reproduction steps and proves they now fail/succeed as required.
 
-**The eight P2/P3 findings were also all resolved, not just the P1:**
+**The nine P2/P3 findings were also all resolved, not just the P1** (CA-02 through
+CA-10, excluding CA-01; an earlier version of this line and `findings.md`'s own summary
+miscounted this as eight — RA-04 correction, see below):
 
 - **CA-02** (freeze readiness) — same fix as CA-01.
 - **CA-03** (Multicall3-as-recipient overclaim) — corrected the documentation rather
@@ -672,3 +674,125 @@ deployment tooling, several phases past where this repository currently stands; 
 itself has also not yet begun). This remediation pass is ready for independent
 re-audit. Once confirmed, Phase 7 (contract security verification) proceeds as
 originally planned on a dedicated branch.
+
+---
+
+## Independent Codex Re-audit and RA-01 Remediation (architecture change)
+
+**Trigger:** an independent re-audit of the remediation pass above (files dropped into
+`audit/` — `codex-addendum-reaudit.md`, `codex-addendum-reaudit-findings.json`,
+`codex-addendum-reaudit-matrix.md`, `codex-addendum-reaudit-command-log.md`), verdict
+**FAIL**: P0 0 · **P1 1** · P2 2 · P3 2. Phase 7 did not begin until the P1 was
+resolved.
+
+**The P1 (RA-01) was real, not a false alarm:** `SweepExecutor.registerAdapter` still
+accepted any contract and `freezeConfiguration` still trusted that contract's own
+self-reported `configurationFrozen()` value. `MockAdapter` was direct evidence the
+predicate was forgeable — its `configurationFrozen` defaulted to `true` while its
+mode/ratio/reported-frozen-flag all remained mutable after "freezing." A malicious or
+upgradeable adapter could return `true`, be permanently blessed, and change behavior
+afterward.
+
+**Fix — the adapter registry was removed entirely, not patched further:**
+
+1. `SwapAction.adapter` (an arbitrary `address`) replaced with `SwapAction.adapterKind`,
+   a closed `SweepPlanLib.AdapterKind` enum (`PANCAKE_V2 = 0`, `UNISWAP_V3 = 1`).
+2. `SweepExecutor` now takes `pancakeV2Adapter_` and `uniswapV3Adapter_` as immutable
+   constructor arguments (`PANCAKE_V2_ADAPTER`, `UNISWAP_V3_ADAPTER`) — fixed for the
+   contract's lifetime, resolved per-swap via `_adapterFor`.
+3. `registerAdapter`, `removeAdapter`, `allowedAdapters`, `_registeredAdapterList`,
+   `MULTICALL3_ADDRESS`, `AdapterIsMulticall3`, `AdapterNotAllowed`,
+   `RegisteredAdapterNotFrozen`, and `IFreezableAdapter.sol` are all deleted — not
+   deprecated, not hidden behind a flag.
+4. `freezeConfiguration()` initially dropped all adapter-related checks (later
+   revisited — see "Follow-up hardening" below).
+5. Any out-of-range `AdapterKind` ordinal is rejected by Solidity's own ABI decoder
+   before `executeSweep`'s body runs — a language-level guarantee, not a runtime check.
+
+This also resolves **RA-03** (P2, unbounded adapter-history gas growth in
+`freezeConfiguration`) as a side effect: there is no adapter history to iterate anymore.
+
+**Regression tests:** the four CA-01-era adapter-lifecycle tests
+(`test_unregisteredAdapter_reverts`, `test_multicall3_rejectedAsUnregisteredAdapter`,
+`test_registerAdapter_rejectsMulticall3Explicitly`,
+`test_freezeConfiguration_revertsIfRegisteredAdapterNotFrozen`,
+`test_freezeConfiguration_succeedsWhenAllRegisteredAdaptersFrozen`,
+`test_freezeConfiguration_ignoresRemovedAdapters`) were removed because the mechanism
+they tested no longer exists, and replaced with tests proving the new architecture
+directly: `test_invalidAdapterKindOrdinal_revertsAtAbiDecode` (proves the ABI-decode
+guarantee the whole design relies on) and `test_registerAdapterSelector_noLongerExists` /
+`test_removeAdapterSelector_noLongerExists` (prove the functions are gone from the
+ABI, not merely input-validated). `test_maliciousReentrantAdapter_reverts` was
+rewritten to deploy its own `SweepExecutor` instance with the reentrant mock wired at
+construction (adapters can no longer be registered post-deployment).
+
+### Follow-up hardening: constructor validation and freeze coupling
+
+A narrow follow-up review of the RA-01 remediation found two remaining gaps, both
+fixed in the same pass:
+
+1. **Constructor validated only nonzero-ness.** An EOA, a duplicate adapter pair, or
+   Multicall3's own real address could be wired into either fixed slot. **Fixed:** the
+   constructor now reverts on no-code addresses (`AdapterHasNoCode`), a duplicate pair
+   (`DuplicateAdapterAddress`), or Multicall3's verified real address in either slot
+   (`AdapterIsMulticall3` — reintroduced, but as a constructor-time check against an
+   immutable slot, not a runtime registry check).
+2. **Freeze said nothing about adapter-level mutable config.** Each fixed adapter's
+   own intermediate-asset allowlist remained separately owner-mutable indefinitely
+   after "freezing" the executor. **Fixed:** `freezeConfiguration()` now reverts
+   (`AdapterNotYetFrozen`) unless both `PANCAKE_V2_ADAPTER` and `UNISWAP_V3_ADAPTER`
+   have already frozen themselves — reading `configurationFrozen()` from exactly the
+   two specific, immutable-address contracts fixed at construction, not an arbitrary
+   registry, so this does not reintroduce RA-01's forgeable-trust pattern.
+
+New tests: `test_constructor_rejectsAdapterWithNoCode`,
+`test_constructor_rejectsDuplicateAdapterPair`,
+`test_constructor_rejectsMulticall3InEitherSlot`,
+`test_freezeConfiguration_revertsUnlessBothAdaptersFrozen`, and
+`test_swapsUnaffectedByFreezeState` (proves swaps are unaffected by freeze state
+either way, since only output-token mutation functions are freeze-gated).
+`MockAdapter` regained a minimal `configurationFrozen`/`freezeConfiguration()` pair so
+tests can control it directly. `forge test` now passes **103/103** (was 99).
+Also fixed the stale CA-07 evidence this follow-up surfaced in
+`artifacts/security-addendum/test-results.md` (a grep-match count and an
+`action.adapter` reference both predating this session's renames).
+
+**RA-02** (P2, freeze-readiness gaps/weak mock-only coverage) is moot — the freeze
+mechanism it concerned no longer exists.
+
+**RA-04** (P3, "eight" vs. nine P2/P3 findings) and **RA-05** (P3, stale absolute
+no-Multicall3-references claims left uncorrected in some places) are fixed in this
+pass — see the corrections in `artifacts/security-addendum/findings.md`,
+`docs/security-addendum-review.md`'s new addendum section, and
+`docs/approval-architecture.md`.
+
+**Commands executed and results:**
+
+```
+forge build                                                          -> successful (src/ and full)
+forge fmt --check (from packages/contracts)                          -> clean
+forge test                                                           -> 103 passed, 0 failed (was 97 pre-RA-01; +6 net across both hardening passes)
+pnpm typecheck / build / lint / format                               -> all clean
+pnpm test                                                            -> transaction-review: 20 tests, all passing incl. new golden vector
+```
+
+**Golden vector A's `executionPlanHash` changed** as a direct, expected consequence of
+`adapter` (address) → `adapterKind` (uint8 enum) — see `test-vectors/golden-vectors.md`
+for the new value and revision history entry.
+
+**Remaining P2 (tracked, not a Phase-7 blocker):** a follow-up independent review's
+verdict was **CONDITIONAL PASS** (P0 0 · P1 0 · P2 1 · P3 0) — the two P1s above are
+resolved, but only under an explicit deployment-time trust boundary: the constructor
+checks (no-code/duplicate/Multicall3 rejection) narrow _which_ addresses can be wired
+into the two immutable adapter slots, but cannot themselves prove the deployed
+bytecode there is genuinely the audited `PancakeV2Adapter`/`UniswapV3Adapter` source.
+Fixed by adding an explicit Phase 9 gate rather than leaving this an implicit
+assumption: `docs/requirements-traceability.md`'s Section 2 now has a row requiring
+the deploy script to read back `SweepExecutor.PANCAKE_V2_ADAPTER()`/
+`UNISWAP_V3_ADAPTER()` post-deployment and assert each matches the independently
+deployed, source-verified adapter address from the same run, recorded in
+`deployments/mainnet.json`.
+
+**Phase 8 may not begin. Phase 7 has still not begun.** This remediation pass is ready
+for independent re-audit. Once confirmed, Phase 7 (contract security verification)
+proceeds as originally planned on a dedicated branch.

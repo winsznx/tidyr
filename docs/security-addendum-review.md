@@ -6,6 +6,90 @@ approval-drain vectors) requesting a mandatory security architecture review of P
 0–6 before Phase 7 (the PRD's own security-hardening phase) begins.
 **Branch:** `fix/security-addendum-before-phase-7`
 
+## Addendum: RA-01 remediation supersedes the original CA-01/CA-02 fix
+
+**Date:** 2026-07-17 (independent Codex re-audit of this document's own remediation).
+
+The original review below fixed CA-01 by adding a `MULTICALL3_ADDRESS` explicit-
+rejection check to `registerAdapter` and an adapter-readiness check to
+`freezeConfiguration` (requiring every registered adapter to self-report
+`configurationFrozen() == true`). An independent re-audit correctly found this
+insufficient and classified it **P1 (RA-01)**: registration still accepted any other
+arbitrary contract, and freeze trusted that contract's own self-reported
+`configurationFrozen()` value — a malicious or mutable adapter could simply return
+`true` while remaining free to change behavior afterward. The re-audit's own evidence
+(`audit/codex-addendum-reaudit.md`, `audit/codex-addendum-reaudit-findings.json`) noted
+`MockAdapter` itself proved the predicate was forgeable.
+
+**This has since been remediated by removing the adapter registry entirely.**
+`SweepExecutor` no longer has `registerAdapter`, `removeAdapter`, `allowedAdapters`, or
+any concept of adapter "freeze readiness." Instead:
+
+- `SwapAction.adapter` (an arbitrary `address`) was replaced with
+  `SwapAction.adapterKind`, a closed `SweepPlanLib.AdapterKind` enum
+  (`PANCAKE_V2 = 0`, `UNISWAP_V3 = 1`).
+- `SweepExecutor` takes `pancakeV2Adapter_` and `uniswapV3Adapter_` as immutable
+  constructor arguments — `PANCAKE_V2_ADAPTER` and `UNISWAP_V3_ADAPTER` — fixed for the
+  contract's lifetime.
+- `freezeConfiguration()` now only concerns the output-token allowlist; it has no
+  adapter-related check left, because there is nothing adapter-related left to check.
+- Any out-of-range `AdapterKind` ordinal is rejected by Solidity's own ABI decoder
+  before `executeSweep`'s body runs — proven directly by
+  `SweepExecutor.t.sol::test_invalidAdapterKindOrdinal_revertsAtAbiDecode`.
+
+Every claim below this addendum that describes `registerAdapter`, `allowedAdapters`,
+adapter-readiness-gated freezing, or `test_multicall3_rejectedAsUnregisteredAdapter` /
+`test_registerAdapter_rejectsMulticall3Explicitly` describes the **superseded**
+CA-01/CA-02 design, retained here as historical record of what was tried and why it
+was insufficient — not the current implementation. See
+`packages/contracts/src/SweepExecutor.sol`'s contract-level doc comment and
+`packages/contracts/test/SweepExecutor.t.sol` for the current, RA-01-remediated
+design and its regression tests, and `test-vectors/golden-vectors.md` for the updated
+golden hash (`SwapAction.adapter` → `adapterKind` changed Vector A's expected value).
+
+### Follow-up hardening: constructor validation and freeze coupling
+
+A narrow follow-up review of the RA-01 remediation correctly identified two remaining
+gaps in the immutable-adapter design, both since fixed:
+
+1. **Constructor accepted any nonzero adapter address.** `pancakeV2Adapter_`/
+   `uniswapV3Adapter_` were only checked for `!= address(0)` — an EOA, a duplicate
+   pair, or Multicall3's own real address could be wired in with no further
+   validation. **Fixed:** the constructor now reverts on `extcodesize == 0` (rejects
+   EOAs, `AdapterHasNoCode`), a duplicate pair (`DuplicateAdapterAddress`), or either
+   slot being Multicall3's verified real address (`AdapterIsMulticall3`). This cannot
+   prove the deployed bytecode is genuinely the audited adapter source — that remains
+   a deployment-script/code-verification responsibility (Phase 9) — but it closes the
+   cheap, on-chain-checkable gaps.
+2. **Freezing said nothing about adapter-level mutable configuration.** RA-01 made
+   adapter _addresses_ immutable, but each adapter's own intermediate-asset allowlist
+   remained separately owner-mutable indefinitely, so a "frozen" executor could still
+   route through an adapter whose routing surface kept changing. **Fixed:**
+   `freezeConfiguration()` now reverts (`AdapterNotYetFrozen`) unless both
+   `PANCAKE_V2_ADAPTER` and `UNISWAP_V3_ADAPTER` have already frozen themselves. This
+   reads `configurationFrozen()` from exactly the two specific, immutable-address
+   contracts fixed at construction — not an arbitrary, attacker-registerable registry
+   — so it is not a reintroduction of the RA-01 forgeable-trust pattern.
+
+See `packages/contracts/src/SweepExecutor.sol`'s contract-level doc comment and
+`test_constructor_rejectsAdapterWithNoCode`, `test_constructor_rejectsDuplicateAdapterPair`,
+`test_constructor_rejectsMulticall3InEitherSlot`, and
+`test_freezeConfiguration_revertsUnlessBothAdaptersFrozen` in
+`packages/contracts/test/SweepExecutor.t.sol`.
+
+**Remaining P2, tracked (not a Phase-7 blocker):** a second follow-up review noted
+these constructor checks narrow _which_ addresses can be wired in (non-EOA,
+non-duplicate, non-Multicall3) but cannot themselves prove the deployed bytecode at
+those addresses _is_ the audited `PancakeV2Adapter`/`UniswapV3Adapter` source — a
+coded contract that merely implements `IAdapter` (including one forging
+`configurationFrozen()`) could still pass every constructor check. That is a
+deployment-time trust boundary, not a Solidity-expressible one, and it is now an
+explicit tracked gate rather than an implicit assumption: see
+`docs/requirements-traceability.md`'s Section 2 row requiring Phase 9's deploy script
+to read back `SweepExecutor.PANCAKE_V2_ADAPTER()`/`UNISWAP_V3_ADAPTER()` and assert
+each matches the independently deployed, source-verified adapter address from the
+same deployment run.
+
 ## Method
 
 Every claim in the review request was checked against the actual repository state —

@@ -9,8 +9,8 @@ approval/routing/balance-isolation issue; **P2** correctness/incomplete capabili
 
 | ID   | Severity                                | Existing implementation                                                                                                                                                                                    | Required state                                                      | Fix                                                                                                                                                        | Test                                                                                                                             |
 | ---- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| F-1  | — (not applicable)                      | No Multicall3 reference exists anywhere in the codebase                                                                                                                                                    | Multicall3 must never be approved/spender/adapter/router/recipient  | No fix needed — nothing to fix. Added an explicit named test anyway for audit clarity.                                                                     | `SweepExecutor.t.sol::test_multicall3_rejectedAsUnregisteredAdapter`                                                             |
-| F-2  | — (not applicable)                      | `SweepExecutor` only accepts typed `SwapAction`/`TransferAction`/`DiscardAction`/`BurnAction`; no generic `Call{target,callData}` exists (grep confirmed)                                                  | No arbitrary execution targets                                      | No fix needed                                                                                                                                              | `test_unregisteredAdapter_reverts`, structural (no such struct exists to test against)                                           |
+| F-1  | — (not applicable)                      | No Multicall3 reference exists anywhere in TIDYR's own production code; the RA-01 remediation additionally removed the adapter registry Multicall3 could ever have been registered into                    | Multicall3 must never be approved/spender/adapter/router/recipient  | No fix needed. RA-01 superseded the earlier named test with a structural guarantee (see below).                                                            | `SweepExecutor.t.sol::test_registerAdapterSelector_noLongerExists`, `test_removeAdapterSelector_noLongerExists`                  |
+| F-2  | — (not applicable)                      | `SweepExecutor` only accepts typed `SwapAction`/`TransferAction`/`DiscardAction`/`BurnAction`; no generic `Call{target,callData}` exists (grep confirmed)                                                  | No arbitrary execution targets                                      | No fix needed                                                                                                                                              | `test_invalidAdapterKindOrdinal_revertsAtAbiDecode`, structural (no such struct exists to test against)                          |
 | F-3  | — (not applicable)                      | Permit2 integration uses `SignatureTransfer.permitWitnessTransferFrom` exclusively, never `AllowanceTransfer`                                                                                              | SignatureTransfer only                                              | No fix needed                                                                                                                                              | `Permit2Witness.t.sol` (7 tests), `SweepExecutor.t.sol` signing helper                                                           |
 | F-4  | — (not applicable)                      | `aggregateTokenAmounts` requests exact per-token sums; no `type(uint256).max` request exists in contracts                                                                                                  | Exact amounts, never unlimited                                      | No fix needed                                                                                                                                              | `Permit2Witness.t.sol::test_aggregateTokenAmounts_dedupesAndSums`, `test_excessivePull_fails`                                    |
 | F-5  | P1-adjacent (hardening, not an exploit) | `executionPlanHash` did not explicitly include `chainId`/`executor`, though Permit2's own domain separator and `msg.sender` binding already made cross-chain/cross-executor replay structurally impossible | Explicit binding per the review's request, for audit clarity        | Added `chainId` and `executor` as the first two parameters to `SweepPlanLib.hashPlan`, mirrored in TypeScript; regenerated and re-verified golden vector A | `SweepPlanLib.t.sol` (new chainId/executor tests via `TEST_CHAIN_ID`/`TEST_EXECUTOR`), `executionPlanHash.test.ts` (2 new tests) |
@@ -61,8 +61,8 @@ registered adapter to itself report `configurationFrozen() == true` (reverting
 `test_freezeConfiguration_succeedsWhenAllRegisteredAdaptersFrozen`, and
 `test_freezeConfiguration_ignoresRemovedAdapters` for the regression tests.
 
-The independent audit also found eight P2/P3 documentation-accuracy and
-test-completeness gaps (CA-02 through CA-09, excluding CA-01), all resolved in the same
+The independent audit also found **nine** P2/P3 documentation-accuracy and
+test-completeness gaps (CA-02 through CA-10, excluding CA-01), all resolved in the same
 remediation pass: freeze-readiness (CA-02, same fix as CA-01), an overclaimed
 recipient restriction (CA-03, corrected — see conflict C-8 in
 `docs/requirements-traceability.md`), incomplete hash-mutation regression coverage
@@ -70,8 +70,26 @@ recipient restriction (CA-03, corrected — see conflict C-8 in
 Phase 11/12 acceptance gates for pricing/oracle and generic-token deferrals (CA-05/CA-06,
 now explicit in `docs/implementation-plan.md`), inaccurate grep-evidence claims (CA-07,
 corrected throughout this evidence package), a real `forge fmt` failure (CA-08, fixed),
-and this document's own count mismatch (CA-09/CA-10 — CA-09 concerned
-`docs/requirements-traceability.md`'s stale hash/count references, since corrected).
+a stale vector/count reference in `docs/requirements-traceability.md` (CA-09, corrected),
+and this document's own count mismatch (CA-10 — an earlier version of this document's
+disposition summary miscounted findings; corrected). (**RA-04 correction:** an earlier
+version of this paragraph itself said "eight" — CA-02 through CA-10 is nine items, not
+eight; this is that correction.)
+
+**Superseded by a subsequent independent re-audit (RA-01, P1):** the CA-01/CA-02 fix
+described above — `AdapterIsMulticall3` rejection plus adapter-readiness-gated
+freezing — was found insufficient. Registration still accepted arbitrary contracts,
+and freeze trusted an arbitrary contract's self-reported `configurationFrozen()`
+value, which a malicious or mutable adapter could forge. This has since been
+remediated by removing the adapter registry entirely in favor of a closed
+`AdapterKind` enum resolving to two immutable, constructor-fixed adapter addresses —
+see the "Addendum: RA-01 remediation" section at the top of
+`docs/security-addendum-review.md` and `packages/contracts/src/SweepExecutor.sol` for
+the current design. `test_registerAdapter_rejectsMulticall3Explicitly` and
+`test_multicall3_rejectedAsUnregisteredAdapter`, referenced throughout this document,
+no longer exist — replaced by `test_registerAdapterSelector_noLongerExists`,
+`test_removeAdapterSelector_noLongerExists`, and
+`test_invalidAdapterKindOrdinal_revertsAtAbiDecode`.
 
 Phase 7 may proceed once this remediation pass's own validation commands all pass
 (see the bottom of `artifacts/security-addendum/test-results.md`) and an independent

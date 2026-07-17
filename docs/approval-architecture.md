@@ -28,11 +28,22 @@ TIDYR's rules, current and binding for all future phases:
    corresponding threat (Codex addendum audit finding CA-03 — an earlier draft of this
    document incorrectly included "recipient" in this list; corrected here, see
    `docs/requirements-traceability.md` conflict C-8).
-4. Contract-level proof: `SweepExecutor.sol`'s `registerAdapter` explicitly reverts with
-   `AdapterIsMulticall3` for Multicall3's real, verified address — not merely the
-   default (never-registered) state. `packages/contracts/test/SweepExecutor.t.sol`
-   proves both: `test_multicall3_rejectedAsUnregisteredAdapter` (default state) and
-   `test_registerAdapter_rejectsMulticall3Explicitly` (registration itself reverts).
+4. Contract-level proof: **superseded by the RA-01 remediation.** `SweepExecutor` no
+   longer has a `registerAdapter` function or any adapter registry at all —
+   `SwapAction.adapterKind` is a closed `AdapterKind` enum (`PANCAKE_V2`/`UNISWAP_V3`)
+   resolving to one of exactly two immutable addresses fixed at construction, so there
+   is no address field, registration call, or allowlist for Multicall3 (or anything
+   else) to reach in the first place. An earlier remediation pass added an explicit
+   `AdapterIsMulticall3` rejection in `registerAdapter`, proved by
+   `test_multicall3_rejectedAsUnregisteredAdapter` and
+   `test_registerAdapter_rejectsMulticall3Explicitly` — an independent re-audit found
+   this insufficient (finding RA-01: registration still trusted arbitrary contracts'
+   self-reported freeze state) and it was replaced by the closed-adapter-kind
+   architecture instead of being patched further. See `SweepExecutor.sol`'s
+   contract-level doc comment and `test_registerAdapterSelector_noLongerExists` /
+   `test_removeAdapterSelector_noLongerExists` (proving the functions no longer exist
+   at all) and `test_invalidAdapterKindOrdinal_revertsAtAbiDecode` (proving Solidity's
+   ABI decoder itself rejects any adapter identifier outside the closed set).
 5. TypeScript-level proof (not yet possible): once Phase 11/12 builds an approval or
    transaction-calldata builder, it must include a test (`approvalBuilder_rejectsMulticall3AsSpender`
    or equivalent) proving the builder refuses to construct an approval or write call
@@ -44,9 +55,12 @@ TIDYR's rules, current and binding for all future phases:
 `SweepExecutor` never accepts a generic `struct Call { address target; bytes callData; }`
 — confirmed absent by `grep -rn "struct Call\b" packages/contracts/src` (no matches).
 Every action is one of the four typed structs in `SweepPlanLib.sol`
-(`SwapAction`/`TransferAction`/`DiscardAction`/`BurnAction`), and every swap's `adapter`
-field is checked against `allowedAdapters` before any external call
-(`SweepExecutor.sol`, `executeSweep`'s swap-validation loop).
+(`SwapAction`/`TransferAction`/`DiscardAction`/`BurnAction`). Every swap's
+`adapterKind` is a closed `AdapterKind` enum (`PANCAKE_V2`/`UNISWAP_V3`), resolved via
+`SweepExecutor._adapterFor` to one of exactly two immutable addresses fixed at
+construction — there is no runtime allowlist check because there is no address field
+in a plan to check in the first place (Codex addendum re-audit finding RA-01,
+superseding the earlier `allowedAdapters` registry design).
 
 Each adapter independently validates its own route before ever reaching a DEX call:
 
@@ -61,42 +75,58 @@ Neither adapter accepts a caller-supplied router or arbitrary command bytes — 
 SwapRouter02's fixed `exactInput` signature directly rather than wrapping Universal
 Router's generic command stream in the first place.
 
-## Frozen configuration (added by this review, hardened after Codex addendum audit)
+## Frozen configuration (added by this review; adapter lifecycle removed by RA-01)
 
 `SweepExecutor`, `PancakeV2Adapter`, and `UniswapV3Adapter` each expose
 `freezeConfiguration()` (owner-only, irreversible). Once frozen:
 
-- `SweepExecutor.registerAdapter` / `removeAdapter` / `registerOutputToken` /
-  `removeOutputToken` all revert with `ConfigurationIsFrozen`.
+- `SweepExecutor.registerOutputToken` / `removeOutputToken` revert with
+  `ConfigurationIsFrozen`.
 - Each adapter's `allowIntermediateAsset` / `disallowIntermediateAsset` revert the same way.
 - `SweepExecutor.recoverStrayTokens` remains available — it is unrelated to the
   execution security boundary the freeze protects.
 
-**`registerAdapter` explicitly rejects Multicall3's real, verified address**
-(`AdapterIsMulticall3`), regardless of owner action — not merely because it defaults to
-unregistered.
+**Superseded by the RA-01 remediation:** `SweepExecutor` no longer has
+`registerAdapter`/`removeAdapter` or an `allowedAdapters` mapping. An earlier
+remediation pass (CA-01/CA-02) added an explicit `AdapterIsMulticall3` rejection to
+`registerAdapter` and made `freezeConfiguration` require every registered adapter to
+self-report `configurationFrozen() == true` via `IFreezableAdapter`. An independent
+Codex re-audit (finding RA-01, P1) correctly identified this as insufficient:
+registration still accepted any other arbitrary contract, and freeze trusted that
+contract's own self-reported state — a malicious or mutable adapter could simply
+return `true` while remaining free to change behavior afterward (`MockAdapter` itself
+was direct evidence the predicate was forgeable). Rather than patching the predicate
+further, the registry was removed: `PANCAKE_V2_ADAPTER` and `UNISWAP_V3_ADAPTER` are
+now immutable constructor arguments with no post-deployment mutation path.
+`IFreezableAdapter.sol` (the interface backing the old registry-trust check) has been
+deleted as dead code.
 
-**`freezeConfiguration` requires every currently-registered adapter to itself already
-report `configurationFrozen() == true`** (via `IFreezableAdapter`), reverting with
-`RegisteredAdapterNotFrozen(adapter)` otherwise. This closes a real gap the Codex
-addendum audit found (finding CA-01, P1): before this fix, an owner could register any
-address — including, in principle, a contract that correctly implements `IAdapter` but
-is not itself locked down — and `freezeConfiguration` would permanently "bless" it
-without verifying its own routing surface (e.g. intermediate-asset allowlist) was also
-locked. A "frozen" `SweepExecutor` is now only achievable once every adapter it can
-still reach is itself frozen. Adapters that were registered and later removed
-(`allowedAdapters[a] == false`) are exempt, since they're no longer reachable.
+**Follow-up hardening — freeze still couples to adapter-level config, but narrowly:**
+a subsequent review correctly noted that immutable _addresses_ alone don't make a
+"frozen" executor fully locked, since each fixed adapter's own intermediate-asset
+allowlist remains separately owner-mutable. `freezeConfiguration()` now reverts
+(`AdapterNotYetFrozen`) unless both `PANCAKE_V2_ADAPTER` and `UNISWAP_V3_ADAPTER`
+have already frozen themselves. This is not a reintroduction of RA-01's forgeable
+pattern: it reads `configurationFrozen()` from exactly the two specific,
+immutable-address contracts fixed at construction, never an arbitrary or
+attacker-registerable one. The constructor also now rejects an EOA (`AdapterHasNoCode`),
+a duplicate adapter pair (`DuplicateAdapterAddress`), or Multicall3's real address in
+either slot (`AdapterIsMulticall3`) — closing the cheap, on-chain-checkable gaps in
+what the constructor previously validated (nonzero-only).
 
-A new DEX integration or output asset after freezing requires deploying a new
-`SweepExecutor`/adapter version, not a change to a deployment users already trust.
-Verified by `test_freezeConfiguration_blocksFurtherAdapterAndOutputTokenChanges`,
+A new DEX integration or output asset requires deploying a new `SweepExecutor`/adapter
+version, not a change to a deployment users already trust. Verified by
+`test_freezeConfiguration_blocksFurtherOutputTokenChanges`,
 `test_freezeConfiguration_blocksIntermediateAssetChanges` (both adapters),
 `test_freezeConfiguration_onlyOwner` (all three contracts),
 `test_freezeConfiguration_doesNotBlockRecovery`,
-`test_registerAdapter_rejectsMulticall3Explicitly`,
-`test_freezeConfiguration_revertsIfRegisteredAdapterNotFrozen`,
-`test_freezeConfiguration_succeedsWhenAllRegisteredAdaptersFrozen`, and
-`test_freezeConfiguration_ignoresRemovedAdapters`.
+`test_freezeConfiguration_revertsUnlessBothAdaptersFrozen`,
+`test_swapsUnaffectedByFreezeState`,
+`test_constructor_rejectsAdapterWithNoCode`,
+`test_constructor_rejectsDuplicateAdapterPair`,
+`test_constructor_rejectsMulticall3InEitherSlot`,
+`test_registerAdapterSelector_noLongerExists`, and
+`test_removeAdapterSelector_noLongerExists`.
 
 ## Exact Permit2 amounts, never unlimited
 

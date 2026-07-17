@@ -1,0 +1,84 @@
+{
+  "verdict": "FAIL",
+  "counts": { "P0": 0, "P1": 1, "P2": 2, "P3": 2 },
+  "ca_01_status": "unresolved (specific Multicall3 registration fixed; forged adapter readiness remains)",
+  "prior_findings": {
+    "CA-01": "unresolved",
+    "CA-02": "partially resolved",
+    "CA-03": "resolved",
+    "CA-04": "resolved",
+    "CA-05": "resolved",
+    "CA-06": "resolved",
+    "CA-07": "partially resolved",
+    "CA-08": "resolved",
+    "CA-09": "resolved",
+    "CA-10": "partially resolved"
+  },
+  "findings": [
+    {
+      "id": "RA-01",
+      "severity": "P1",
+      "title": "Arbitrary registered adapters can forge freeze readiness",
+      "file": "packages/contracts/src/SweepExecutor.sol",
+      "line": 137,
+      "requirement": "Adapter freeze readiness must not be forgeable or practically bypassable; a frozen executor must not permanently bless an arbitrary mutable adapter.",
+      "evidence": "registerAdapter rejects only zero and the canonical Multicall3 address, then accepts every other address. freezeConfiguration trusts the attacker-selected contract's configurationFrozen() boolean without validating a reviewed implementation, factory, code hash, proxy status, immutable configuration, or meaningful freeze semantics. The repository's MockAdapter demonstrates the flaw: configurationFrozen defaults true while setFrozen, setMode, and setRatio remain callable, and the executor test freezes around that still-mutable adapter.",
+      "reproduction": "Deploy an IAdapter whose configurationFrozen() returns true and whose swap behavior remains mutable (or use an upgradeable proxy). Register it, call SweepExecutor.freezeConfiguration successfully, mutate/upgrade the adapter afterward, and execute a signed plan through the still-allowed address.",
+      "consequence": "The executor's frozen state does not establish an immutable reviewed execution boundary. Arbitrary adapter behavior can remain reachable permanently, so CA-01's freeze-bypass component remains exploitable in the practical way the re-audit rules classify as P1.",
+      "remediation": "Constrain registration to authenticated, non-upgradeable reviewed adapter implementations/instances (for example immutable typed slots or approved code hashes plus constructor/immutable validation), and verify meaningful frozen state only after identity is established.",
+      "regression_test_required": "An unknown mutable adapter and an upgradeable/forged-true adapter must be rejected at registration or block freeze; only canonical reviewed Pancake/Uniswap instances may freeze the executor, and their post-freeze configuration must be immutable."
+    },
+    {
+      "id": "RA-02",
+      "severity": "P2",
+      "title": "Freeze readiness remains incomplete and is tested only through a weak mock proxy",
+      "file": "packages/contracts/src/SweepExecutor.sol",
+      "line": 174,
+      "requirement": "Empty/invalid configuration must not accidentally freeze unless explicitly intended, and real unfrozen Pancake and Uniswap adapters must each block executor freeze.",
+      "evidence": "freezeConfiguration succeeds with zero active adapters and no readiness definition beyond self-reported booleans. The four claimed CA-01 tests use MockAdapter; no integration test registers an unfrozen PancakeV2Adapter or UniswapV3Adapter and proves each blocks executor freeze. Of the four tests, only the explicit Multicall3-revert test and unfrozen-mock test would fail on the pre-fix implementation; the all-frozen-success and removed-adapter-success tests already pass under the old unconditional freeze behavior.",
+      "reproduction": "Immediately freeze a newly deployed executor: it succeeds. Search the test suite for executor freeze with real PancakeV2Adapter/UniswapV3Adapter: no such readiness test exists.",
+      "consequence": "Invalid deployments can be irreversibly frozen, and the claimed regression set proves a weaker property than the required real-adapter lifecycle.",
+      "remediation": "Define/enforce a valid production configuration and add executor-level lifecycle tests using both production adapter classes.",
+      "regression_test_required": "Empty/invalid freeze follows an explicitly documented policy; unfrozen Pancake and Uniswap each block; both frozen permit; all later executor and adapter mutations revert."
+    },
+    {
+      "id": "RA-03",
+      "severity": "P2",
+      "title": "Unbounded historical adapter enumeration can make freeze exceed the block gas limit",
+      "file": "packages/contracts/src/SweepExecutor.sol",
+      "line": 53,
+      "requirement": "Adapter enumeration must be consistent, bounded, and capable of completing freeze within practical gas limits.",
+      "evidence": "_registeredAdapterList retains every unique address ever registered. removeAdapter only clears allowedAdapters and never removes the historical entry. freezeConfiguration iterates the entire unbounded history, including checking and skipping removed entries.",
+      "reproduction": "As owner, repeatedly register and remove unique addresses, then estimate/call freezeConfiguration after the historical list is large enough to exceed Monad's transaction block-gas allowance.",
+      "consequence": "A compromised or erroneous administrative sequence can permanently prevent the intended trust-boundary transition even after all malicious adapters are removed.",
+      "remediation": "Use a bounded active enumerable set, delete removed entries, and/or enforce a small maximum adapter count appropriate to the supported typed adapters.",
+      "regression_test_required": "Bounded maximum/active-set removal tests plus a worst-case freeze gas assertion below the deployment chain limit."
+    },
+    {
+      "id": "RA-04",
+      "severity": "P3",
+      "title": "Remediation summaries still miscount the nine prior P2/P3 findings as eight",
+      "file": "PROJECT_STATUS.md",
+      "line": 617,
+      "requirement": "Finding totals and remediation mapping must match CA-02 through CA-10.",
+      "evidence": "PROJECT_STATUS.md says 'eight P2/P3 findings'; artifacts/security-addendum/findings.md lines 64-74 repeats eight while discussing CA-02 through CA-10, which is nine findings.",
+      "reproduction": "Count the inclusive identifiers CA-02..CA-10 and compare the remediation text.",
+      "consequence": "CA-10's count-consistency remediation is itself incomplete and the closure accounting remains unreliable.",
+      "remediation": "Change the count to nine and preserve a one-to-one CA-02 through CA-10 mapping.",
+      "regression_test_required": "Documentation table/summary count consistency review."
+    },
+    {
+      "id": "RA-05",
+      "severity": "P3",
+      "title": "Stale absolute no-Multicall claims remain in historical status/evidence sections",
+      "file": "PROJECT_STATUS.md",
+      "line": 498,
+      "requirement": "Documentation must not retain false absolute claims that no Multicall3 references existed when the named test already contained them.",
+      "evidence": "PROJECT_STATUS.md lines 498-500 still says no Multicall3 reference existed anywhere, then names the Multicall3 test at line 525. artifacts/security-addendum/findings.md line 12 retains the same false absolute assertion. Later appended corrections accurately classify matches but do not mark these statements as retracted/incorrect.",
+      "reproduction": "Compare the stale statements with packages/contracts/test/SweepExecutor.t.sol's original named test and the later correction sections.",
+      "consequence": "The documentation remains internally contradictory even though the primary grep evidence was corrected.",
+      "remediation": "Mark the old assertions explicitly as superseded/incorrect or rewrite them to distinguish production-source matches from test references.",
+      "regression_test_required": "Repository documentation search for unqualified no-match claims after evidence updates."
+    }
+  ]
+}

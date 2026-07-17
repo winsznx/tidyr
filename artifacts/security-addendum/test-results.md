@@ -82,10 +82,16 @@ rg -n -i multicall packages apps
      command)
 
 rg -n -i multicall packages/contracts/src packages/shared packages/routing packages/transaction-review packages/execution apps
-  -> 3 matches, all in packages/contracts/src/SweepExecutor.sol: the MULTICALL3_ADDRESS
-     constant, the AdapterIsMulticall3 error, and the explicit-rejection check added by
-     this review's CA-01 fix. Zero matches anywhere else in production source. (Before
-     this review's fix, this scoped command produced zero matches everywhere.)
+  -> STALE as of the RA-01 remediation (see below) — this line originally recorded 3
+     matches for the CA-01-era registry fix (MULTICALL3_ADDRESS constant,
+     AdapterIsMulticall3 error, explicit-rejection check in registerAdapter). That
+     entire mechanism was deleted when the adapter registry was removed. A follow-up
+     hardening pass then reintroduced MULTICALL3_ADDRESS/AdapterIsMulticall3 in a
+     different form — an explicit constructor-time check rejecting Multicall3's real
+     address in either fixed adapter slot — so the current scoped grep again finds
+     matches confined to packages/contracts/src/SweepExecutor.sol, all intentional.
+     Re-run this command against current `src/` before treating any specific count as
+     authoritative; treat this note, not the historical number, as current.
 
 grep -rn "struct Call\b" --include="*.sol" packages/contracts/src packages/contracts/test
   -> no matches
@@ -94,7 +100,11 @@ grep -rn "\.call(\|\.call{value" --include="*.sol" packages/contracts/src
   -> only SweepExecutor.sol's native-MON send to plan.recipient
 
 grep -rn "\.approve(\|forceApprove(" --include="*.sol" packages/contracts/src
-  -> only ever targets action.adapter or an adapter's own immutable ROUTER
+  -> STALE reference to `action.adapter` — that field was renamed to `action.adapterKind`
+     by the RA-01 remediation (an enum identifier, not an address, so it is never an
+     approval target). The approve/forceApprove targets are now: the fixed adapter
+     resolved via `SweepExecutor._adapterFor(action.adapterKind)`, or an adapter's own
+     immutable `ROUTER`/pair address — never a plan-supplied address either way.
 ```
 
 ## Gas snapshot
