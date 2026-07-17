@@ -124,6 +124,50 @@ test("changing executor address changes the hash", () => {
   );
 });
 
+// Codex addendum audit finding CA-04: this and the three tests below close a real gap -
+// owner/adapter/routeData/minAmountOut sensitivity was verified once by an ephemeral,
+// non-retained mutation run, but never committed as regression coverage.
+
+test("changing owner changes the hash", () => {
+  const a = vectorA();
+  const b = vectorA();
+  b.owner = "0x6666666666666666666666666666666666666666";
+  assert.notEqual(
+    hashExecutionPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR),
+    hashExecutionPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR),
+  );
+});
+
+test("changing a swap's adapter changes the hash", () => {
+  const a = vectorA();
+  const b = vectorA();
+  b.swaps[0]!.adapter = "0x7777777777777777777777777777777777777777";
+  assert.notEqual(
+    hashExecutionPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR),
+    hashExecutionPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR),
+  );
+});
+
+test("changing a swap's routeData changes the hash", () => {
+  const a = vectorA();
+  const b = vectorA();
+  b.swaps[0]!.routeData = "0x9999";
+  assert.notEqual(
+    hashExecutionPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR),
+    hashExecutionPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR),
+  );
+});
+
+test("changing a swap's minAmountOut changes the hash", () => {
+  const a = vectorA();
+  const b = vectorA();
+  b.swaps[0]!.minAmountOut = a.swaps[0]!.minAmountOut + 1n;
+  assert.notEqual(
+    hashExecutionPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR),
+    hashExecutionPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR),
+  );
+});
+
 test("reordering swap actions changes the hash", () => {
   const a = vectorA();
   const secondSwap = {

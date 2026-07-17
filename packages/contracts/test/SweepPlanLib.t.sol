@@ -18,8 +18,7 @@ contract SweepPlanLibTest is Test {
 
     /// @dev Golden vector A: one swap, one transfer, no discards/burns.
     /// Independently reproduced in packages/transaction-review/src/executionPlanHash.test.ts
-    bytes32 constant VECTOR_A_EXPECTED_HASH =
-        0xdf7a8dd0108003ffa8b036d6471d7a6479a56d02b6b7737737c398e3515100d1;
+    bytes32 constant VECTOR_A_EXPECTED_HASH = 0xdf7a8dd0108003ffa8b036d6471d7a6479a56d02b6b7737737c398e3515100d1;
 
     function _vectorA() internal pure returns (SweepPlanLib.SweepPlan memory plan) {
         SweepPlanLib.SwapAction[] memory swaps = new SweepPlanLib.SwapAction[](1);
@@ -67,35 +66,109 @@ contract SweepPlanLibTest is Test {
         SweepPlanLib.SweepPlan memory a = _vectorA();
         SweepPlanLib.SweepPlan memory b = _vectorA();
         b.swaps[0].amountIn = 201 ether;
-        assertTrue(SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR) != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR));
+        assertTrue(
+            SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR)
+                != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR)
+        );
     }
 
     function test_recipientChangesHash() public pure {
         SweepPlanLib.SweepPlan memory a = _vectorA();
         SweepPlanLib.SweepPlan memory b = _vectorA();
         b.recipient = 0x5555555555555555555555555555555555555555;
-        assertTrue(SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR) != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR));
+        assertTrue(
+            SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR)
+                != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR)
+        );
     }
 
     function test_outputTokenChangesHash() public pure {
         SweepPlanLib.SweepPlan memory a = _vectorA();
         SweepPlanLib.SweepPlan memory b = _vectorA();
         b.outputToken = 0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A; // WMON instead of USDC
-        assertTrue(SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR) != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR));
+        assertTrue(
+            SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR)
+                != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR)
+        );
     }
 
     function test_deadlineChangesHash() public pure {
         SweepPlanLib.SweepPlan memory a = _vectorA();
         SweepPlanLib.SweepPlan memory b = _vectorA();
         b.deadline = a.deadline + 1;
-        assertTrue(SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR) != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR));
+        assertTrue(
+            SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR)
+                != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR)
+        );
     }
 
     function test_nonceChangesHash() public pure {
         SweepPlanLib.SweepPlan memory a = _vectorA();
         SweepPlanLib.SweepPlan memory b = _vectorA();
         b.nonce = a.nonce + 1;
-        assertTrue(SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR) != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR));
+        assertTrue(
+            SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR)
+                != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR)
+        );
+    }
+
+    /// @dev Codex addendum audit finding CA-04: this and the four tests below close a
+    /// real gap - chainId/executor/owner/adapter/routeData/minAmountOut sensitivity was
+    /// verified once by an ephemeral, non-retained script, but never committed as
+    /// regression coverage.
+    function test_ownerChangesHash() public pure {
+        SweepPlanLib.SweepPlan memory a = _vectorA();
+        SweepPlanLib.SweepPlan memory b = _vectorA();
+        b.owner = 0x6666666666666666666666666666666666666666;
+        assertTrue(
+            SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR)
+                != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR)
+        );
+    }
+
+    function test_adapterChangesHash() public pure {
+        SweepPlanLib.SweepPlan memory a = _vectorA();
+        SweepPlanLib.SweepPlan memory b = _vectorA();
+        b.swaps[0].adapter = 0x7777777777777777777777777777777777777777;
+        assertTrue(
+            SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR)
+                != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR)
+        );
+    }
+
+    function test_routeDataChangesHash() public pure {
+        SweepPlanLib.SweepPlan memory a = _vectorA();
+        SweepPlanLib.SweepPlan memory b = _vectorA();
+        b.swaps[0].routeData = hex"9999";
+        assertTrue(
+            SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR)
+                != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR)
+        );
+    }
+
+    function test_minAmountOutChangesHash() public pure {
+        SweepPlanLib.SweepPlan memory a = _vectorA();
+        SweepPlanLib.SweepPlan memory b = _vectorA();
+        b.swaps[0].minAmountOut = a.swaps[0].minAmountOut + 1;
+        assertTrue(
+            SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR)
+                != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR)
+        );
+    }
+
+    function test_chainIdChangesHash() public pure {
+        SweepPlanLib.SweepPlan memory plan = _vectorA();
+        assertTrue(
+            SweepPlanLib.hashPlan(plan, TEST_CHAIN_ID, TEST_EXECUTOR) != SweepPlanLib.hashPlan(plan, 1, TEST_EXECUTOR)
+        );
+    }
+
+    function test_executorAddressChangesHash() public pure {
+        SweepPlanLib.SweepPlan memory plan = _vectorA();
+        assertTrue(
+            SweepPlanLib.hashPlan(plan, TEST_CHAIN_ID, TEST_EXECUTOR)
+                != SweepPlanLib.hashPlan(plan, TEST_CHAIN_ID, 0x8888888888888888888888888888888888888888)
+        );
     }
 
     /// @dev Swapping the order of two swap actions must change the hash — proves the

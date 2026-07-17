@@ -71,7 +71,16 @@ assumed/fabricated constant.
 | Swap action order reversed (2-swap variant)                             | yes              |
 | `chainId` changed                                                       | yes              |
 | `executor` address changed                                              | yes              |
+| `owner` changed                                                         | yes              |
+| `swaps[0].adapter` changed                                              | yes              |
+| `swaps[0].routeData` changed                                            | yes              |
+| `swaps[0].minAmountOut` +1                                              | yes              |
 | Compare `executionPlanHash` vs. `displayManifestHash` for the same plan | always different |
+
+Every row above is a committed regression test on both languages, not a one-off
+verification run (Codex addendum audit finding CA-04: an earlier pass verified this
+full set once via an ephemeral, non-retained mutation script, but the `owner`,
+`adapter`, `routeData`, and `minAmountOut` rows were not yet committed as tests).
 
 ## Why two independent hashes (PRD §19.3)
 
