@@ -577,3 +577,98 @@ full disposition (P2/P3 items are tracked design-intent for Phase 11/12, not sil
 
 **Next:** Phase 7 as originally planned — Slither, expanded fuzz/invariant/fork
 coverage, gas review, threat-model documentation.
+
+---
+
+## Independent Codex Audit and Remediation (branch `fix/security-addendum-before-phase-7`)
+
+**Trigger:** an independent audit of the security-addendum review above (files dropped
+into `audit/` — `codex-addendum-audit.md`, `codex-addendum-findings.json`,
+`codex-addendum-requirements.md`, `codex-addendum-command-log.md`), verdict **FAIL**:
+P0 0 · **P1 1** · P2 7 · P3 2. Per the operating rules, Phase 7 did not begin until the
+P1 was resolved.
+
+**The P1 (CA-01) was real, not a false alarm — verified directly before fixing:**
+`registerAdapter` accepted any nonzero address (including Multicall3's real address),
+and `freezeConfiguration` never checked whether a registered adapter's own
+configuration was itself frozen. The previously-added `test_multicall3_rejectedAsUnregisteredAdapter`
+proved only the _default_ (never-registered) state — not that registration itself was
+blocked, nor that a registered-but-still-mutable adapter would be caught before the
+executor's freeze permanently "blessed" it.
+
+**Fix:**
+
+1. `registerAdapter` now explicitly reverts (`AdapterIsMulticall3`) for Multicall3's
+   real, verified address, regardless of owner action.
+2. `freezeConfiguration` now requires every currently-registered (and still-allowed)
+   adapter to itself report `configurationFrozen() == true` (via a new
+   `IFreezableAdapter` interface), reverting `RegisteredAdapterNotFrozen(adapter)`
+   otherwise. A "frozen" `SweepExecutor` is now only achievable once every adapter it
+   can still reach is itself frozen — closing the actual gap CA-01 identified.
+3. Adapters removed via `removeAdapter` before freezing are correctly exempt (no longer
+   reachable, so their own mutability is no longer relevant).
+
+**Regression tests added:** `test_registerAdapter_rejectsMulticall3Explicitly`,
+`test_freezeConfiguration_revertsIfRegisteredAdapterNotFrozen`,
+`test_freezeConfiguration_succeedsWhenAllRegisteredAdaptersFrozen`,
+`test_freezeConfiguration_ignoresRemovedAdapters` — each directly reproduces the
+audit's stated reproduction steps and proves they now fail/succeed as required.
+
+**The eight P2/P3 findings were also all resolved, not just the P1:**
+
+- **CA-02** (freeze readiness) — same fix as CA-01.
+- **CA-03** (Multicall3-as-recipient overclaim) — corrected the documentation rather
+  than adding code: `plan.recipient` is the user's own chosen destination for their own
+  funds and carries no pull authority, unlike spender/adapter/router roles. Restricting
+  it would have been security theater with no corresponding threat. See traceability
+  conflict C-8.
+- **CA-04** (incomplete hash-mutation regression coverage) — added 6 new Solidity tests
+  (`owner`/`adapter`/`routeData`/`minAmountOut`/`chainId`/`executor`) and 4 new
+  TypeScript tests (`owner`/`adapter`/`routeData`/`minAmountOut`; `chainId`/`executor`
+  already existed) closing a real gap: this sensitivity had been verified once by an
+  ephemeral, non-retained mutation script, not committed as regression coverage.
+- **CA-05/CA-06** (untracked Phase 11/12 pricing/generic-token deferrals) — added
+  explicit, named acceptance-test requirements to `docs/implementation-plan.md` and
+  `docs/requirements-traceability.md` so a later phase can't satisfy a vague gate
+  without actually implementing the promised boundary.
+- **CA-07** (false "no Multicall3 matches" grep claim) — corrected in
+  `docs/security-addendum-review.md`, `artifacts/security-addendum/test-results.md`,
+  and `findings.md`. The real, reproducible result: vendored dependencies
+  (`packages/contracts/lib/`) contain many unrelated Multicall matches (OpenZeppelin's
+  own call-batching utility, forge-std's own Multicall3 helper); TIDYR's own production
+  source had zero matches before this remediation and 3 legitimate, intentional matches
+  after (the fix itself).
+- **CA-08** (claimed-passing `forge fmt --check` actually failed) — ran `forge fmt`,
+  verified `forge fmt --check` now passes cleanly from `packages/contracts`.
+- **CA-09** (stale hash/count references in traceability) — updated to the current
+  golden vector and test counts; confirmed no other current-state document still cites
+  the pre-addendum hash (the one remaining reference, in this file's own Phase 2
+  history section above, is correctly historical — it documents what was true then).
+- **CA-10** (findings.md's own severity-count table didn't match its summary) —
+  corrected.
+
+**Commands executed and results:**
+
+```
+forge build                                                          -> successful
+forge fmt --check (from packages/contracts)                          -> clean (was failing, CA-08 fixed)
+forge test --no-match-path "*.fork.t.sol" --no-match-contract SweepExecutorInvariantsTest
+                                                                      -> 97 passed, 0 failed (was 87 - +10 new tests)
+forge test --match-path "*.fork.t.sol"                               -> 2 passed (live Monad mainnet)
+forge test --match-contract SweepExecutorInvariantsTest              -> 2 invariants passed (8192 calls each)
+pnpm typecheck / build / test / lint / format                        -> all clean; transaction-review: 20 tests (was 16 - +4 new)
+bash scripts/scan-secrets.sh                                         -> no secret patterns found
+rg -n -i multicall packages/contracts/src ...                        -> 3 matches, all the intentional CA-01 fix
+forge snapshot                                                       -> packages/contracts/.gas-snapshot updated
+```
+
+**Unresolved risks:** none new. P2 items CA-05/CA-06 (pricing/generic-token deferrals)
+now have explicit tracked acceptance tests for Phase 11/12 rather than being resolved
+immediately — appropriately, since implementing them now would mean building
+disconnected code against routing infrastructure that doesn't exist yet.
+
+**Phase 8 may not begin** (per the operating instructions — Phase 8 is mainnet
+deployment tooling, several phases past where this repository currently stands; Phase 7
+itself has also not yet begun). This remediation pass is ready for independent
+re-audit. Once confirmed, Phase 7 (contract security verification) proceeds as
+originally planned on a dedicated branch.

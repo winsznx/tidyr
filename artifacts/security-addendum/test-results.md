@@ -73,8 +73,19 @@ Result: `No secret patterns found in tracked files.`
 ## Manual grep verification (findings F-1 through F-4, F-8)
 
 ```
-grep -rn "Multicall3\|multicall\|MULTICALL" --include="*.sol" --include="*.ts" packages/ apps/
-  -> no matches (excluding vendored lib/out directories)
+rg -n -i multicall packages apps
+  -> many matches once vendored dependencies are included: OpenZeppelin's own unrelated
+     call-batching Multicall.sol utility and forge-std's own IMulticall3/
+     MULTICALL3_ADDRESS helper, both under packages/contracts/lib/ — neither related to
+     TIDYR's adapter/spender risk (Codex addendum audit finding CA-07; an earlier
+     version of this artifact incorrectly reported "no matches" for the unscoped
+     command)
+
+rg -n -i multicall packages/contracts/src packages/shared packages/routing packages/transaction-review packages/execution apps
+  -> 3 matches, all in packages/contracts/src/SweepExecutor.sol: the MULTICALL3_ADDRESS
+     constant, the AdapterIsMulticall3 error, and the explicit-rejection check added by
+     this review's CA-01 fix. Zero matches anywhere else in production source. (Before
+     this review's fix, this scoped command produced zero matches everywhere.)
 
 grep -rn "struct Call\b" --include="*.sol" packages/contracts/src packages/contracts/test
   -> no matches

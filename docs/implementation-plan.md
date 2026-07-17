@@ -26,6 +26,39 @@ the surrounding engineering work.
 | 16         | ERC-7730 descriptors, documentation, `FRONTEND_HANDOFF.md`                                       | Phase 9 (addresses), all prior                   | Handoff doc complete                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Final gate | `PRE_FRONTEND_COMPLETION_REPORT.md`                                                              | All phases                                       | All 23 release-gate items checked or documented blocker                                                                                                                                                                                                                                                                                                                                                                                       |
 
+## Mandatory Phase 11/12 acceptance gates (security addendum, added after Codex audit findings CA-05/CA-06)
+
+The design docs `docs/pricing-and-oracle-model.md` and `docs/token-support-model.md`
+describe _intent_ for Phase 11/12. An independent audit (2026-07-17) correctly found
+that intent alone is not a formal gate — a later phase could satisfy "schema/
+degraded-state tests green" (Phase 11's stated gate) without actually implementing the
+promised boundaries. These are now explicit, named acceptance criteria Phase 11/12 must
+satisfy before either phase can be marked complete:
+
+**PriceService / oracle (CA-05):**
+
+- a named test proving `minAmountOut` enforcement is fully independent of any oracle
+  value (an oracle outage or a manipulated oracle price must not change swap execution
+  safety);
+- a named test proving stale oracle data (publish time beyond a defined freshness
+  window) is rejected for display purposes, not silently shown as current;
+- a named test proving low-confidence oracle data is flagged, not silently treated as
+  precise;
+- a named test proving "executable value" (quote x oracle reference) is computed from
+  the _same_ quote used for execution, not a separately-fetched value that could diverge.
+
+**Generic/dynamic token support (CA-06):**
+
+- a named test proving a manually-entered arbitrary ERC-20 address (not one of
+  DUST1-DUST5, not previously discovered by the indexer) reaches full capability
+  assessment;
+- a named test proving the five demo-token addresses are _not_ used anywhere as a
+  production input-token filter or allowlist — i.e. a wallet holding only non-demo
+  tokens is fully assessable and sweepable.
+
+Phase 11/12 is not complete until these tests exist and pass, in addition to whatever
+schema/degraded-state coverage was already planned.
+
 ## Immediate next actions (Phase 1)
 
 1. Scaffold `pnpm-workspace.yaml`, root `package.json` (lint/typecheck/test/build/format scripts).

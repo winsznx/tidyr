@@ -20,12 +20,19 @@ TIDYR's rules, current and binding for all future phases:
    `allowance`, `decimals`, `symbol`, `name`) — planned for Phase 12's asset-discovery
    pipeline. Nothing in the current codebase calls it at all yet.
 2. TIDYR must never generate `token.approve(MULTICALL3_ADDRESS, amount)`.
-3. Multicall3 must never be registered as an adapter, router, spender, or transfer
-   recipient.
-4. Contract-level proof: `packages/contracts/test/SweepExecutor.t.sol::test_multicall3_rejectedAsUnregisteredAdapter`
-   constructs a plan with Multicall3's real verified address as the swap adapter and
-   confirms it reverts with `AdapterNotAllowed` — the same rejection any other
-   unregistered address gets, with nothing special carved out.
+3. Multicall3 must never be registered as an adapter, router, or spender — every one of
+   these roles grants _pull_ authority over funds it doesn't own. `plan.recipient` is
+   deliberately **not** restricted from being Multicall3: it is the user's own chosen
+   destination for their own swept output, the same as any other address they could pick,
+   and carries no pull authority. Restricting it would be security theater with no
+   corresponding threat (Codex addendum audit finding CA-03 — an earlier draft of this
+   document incorrectly included "recipient" in this list; corrected here, see
+   `docs/requirements-traceability.md` conflict C-8).
+4. Contract-level proof: `SweepExecutor.sol`'s `registerAdapter` explicitly reverts with
+   `AdapterIsMulticall3` for Multicall3's real, verified address — not merely the
+   default (never-registered) state. `packages/contracts/test/SweepExecutor.t.sol`
+   proves both: `test_multicall3_rejectedAsUnregisteredAdapter` (default state) and
+   `test_registerAdapter_rejectsMulticall3Explicitly` (registration itself reverts).
 5. TypeScript-level proof (not yet possible): once Phase 11/12 builds an approval or
    transaction-calldata builder, it must include a test (`approvalBuilder_rejectsMulticall3AsSpender`
    or equivalent) proving the builder refuses to construct an approval or write call
@@ -54,7 +61,7 @@ Neither adapter accepts a caller-supplied router or arbitrary command bytes — 
 SwapRouter02's fixed `exactInput` signature directly rather than wrapping Universal
 Router's generic command stream in the first place.
 
-## Frozen configuration (added by this review)
+## Frozen configuration (added by this review, hardened after Codex addendum audit)
 
 `SweepExecutor`, `PancakeV2Adapter`, and `UniswapV3Adapter` each expose
 `freezeConfiguration()` (owner-only, irreversible). Once frozen:
@@ -65,12 +72,31 @@ Router's generic command stream in the first place.
 - `SweepExecutor.recoverStrayTokens` remains available — it is unrelated to the
   execution security boundary the freeze protects.
 
+**`registerAdapter` explicitly rejects Multicall3's real, verified address**
+(`AdapterIsMulticall3`), regardless of owner action — not merely because it defaults to
+unregistered.
+
+**`freezeConfiguration` requires every currently-registered adapter to itself already
+report `configurationFrozen() == true`** (via `IFreezableAdapter`), reverting with
+`RegisteredAdapterNotFrozen(adapter)` otherwise. This closes a real gap the Codex
+addendum audit found (finding CA-01, P1): before this fix, an owner could register any
+address — including, in principle, a contract that correctly implements `IAdapter` but
+is not itself locked down — and `freezeConfiguration` would permanently "bless" it
+without verifying its own routing surface (e.g. intermediate-asset allowlist) was also
+locked. A "frozen" `SweepExecutor` is now only achievable once every adapter it can
+still reach is itself frozen. Adapters that were registered and later removed
+(`allowedAdapters[a] == false`) are exempt, since they're no longer reachable.
+
 A new DEX integration or output asset after freezing requires deploying a new
 `SweepExecutor`/adapter version, not a change to a deployment users already trust.
 Verified by `test_freezeConfiguration_blocksFurtherAdapterAndOutputTokenChanges`,
 `test_freezeConfiguration_blocksIntermediateAssetChanges` (both adapters),
-`test_freezeConfiguration_onlyOwner` (all three contracts), and
-`test_freezeConfiguration_doesNotBlockRecovery`.
+`test_freezeConfiguration_onlyOwner` (all three contracts),
+`test_freezeConfiguration_doesNotBlockRecovery`,
+`test_registerAdapter_rejectsMulticall3Explicitly`,
+`test_freezeConfiguration_revertsIfRegisteredAdapterNotFrozen`,
+`test_freezeConfiguration_succeedsWhenAllRegisteredAdaptersFrozen`, and
+`test_freezeConfiguration_ignoresRemovedAdapters`.
 
 ## Exact Permit2 amounts, never unlimited
 

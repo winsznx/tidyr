@@ -27,14 +27,53 @@ approval/routing/balance-isolation issue; **P2** correctness/incomplete capabili
 | F-16 | P3                                      | No TypeScript-level approval/transaction builder exists yet, so `approvalBuilder_rejectsMulticall3AsSpender` (as literally named in the review request) cannot be written against real code                | Explicit test once the builder exists                               | Recorded as a mandatory Phase 11 requirement in `docs/implementation-plan.md`'s Phase 11 row, rather than writing a test against nonexistent code          | deferred, tracked                                                                                                                |
 | F-17 | P3                                      | 0x integration doesn't exist yet                                                                                                                                                                           | Spender allowlisting for 0x-returned spenders                       | Documented design intent in `docs/approval-architecture.md`; implementation is Phase 11/12                                                                 | none yet — tracked, not faked                                                                                                    |
 
-## Disposition
+## Disposition (as of this document's original review pass)
 
 - **P0: none found.**
 - **P1: none found as exploitable gaps.** Two P1-adjacent hardening items (F-5, F-6)
   were identified as reasonable additions and both are fixed and tested.
-- **P2:** four items (F-13, F-14, F-15, F-17), all belonging to phases not yet reached;
+- **P2:** three items (F-13, F-14, F-15), all belonging to phases not yet reached;
   documented as binding design intent rather than implemented out of sequence.
-- **P3:** one item (F-16), tracked as an explicit future requirement.
+- **P3:** two items (F-16, F-17), tracked as explicit future requirements.
 
-Phase 7 may proceed. See `artifacts/security-addendum/test-results.md` for the exact
+**Correction (Codex addendum audit finding CA-10):** an earlier version of this
+disposition miscounted F-17 as P2 in this summary while the table above correctly
+labeled it P3; the counts above are now consistent with the table.
+
+## Independent audit findings (Codex, 2026-07-17) — see `audit/` for full detail
+
+An independent audit of this document and the branch's three commits found **one real
+P1** this document's own review pass missed: **CA-01** — `registerAdapter` accepted any
+nonzero address (including Multicall3's real address), and `freezeConfiguration` did
+not verify registered adapters' own configuration was itself frozen, so a "frozen"
+`SweepExecutor` did not actually establish that only reviewed, immutable adapters were
+reachable. The named Multicall3 test (`test_multicall3_rejectedAsUnregisteredAdapter`)
+proved only the default unregistered state, not that registration itself was blocked.
+
+This has been fixed: `registerAdapter` now explicitly reverts (`AdapterIsMulticall3`)
+for Multicall3's address, and `freezeConfiguration` now requires every currently
+registered adapter to itself report `configurationFrozen() == true` (reverting
+`RegisteredAdapterNotFrozen` otherwise). See `docs/approval-architecture.md` and
+`docs/requirements-traceability.md` for full detail, and
+`packages/contracts/test/SweepExecutor.t.sol`'s
+`test_registerAdapter_rejectsMulticall3Explicitly`,
+`test_freezeConfiguration_revertsIfRegisteredAdapterNotFrozen`,
+`test_freezeConfiguration_succeedsWhenAllRegisteredAdaptersFrozen`, and
+`test_freezeConfiguration_ignoresRemovedAdapters` for the regression tests.
+
+The independent audit also found eight P2/P3 documentation-accuracy and
+test-completeness gaps (CA-02 through CA-09, excluding CA-01), all resolved in the same
+remediation pass: freeze-readiness (CA-02, same fix as CA-01), an overclaimed
+recipient restriction (CA-03, corrected — see conflict C-8 in
+`docs/requirements-traceability.md`), incomplete hash-mutation regression coverage
+(CA-04, closed with 6 new Solidity tests and 4 new TypeScript tests), untracked
+Phase 11/12 acceptance gates for pricing/oracle and generic-token deferrals (CA-05/CA-06,
+now explicit in `docs/implementation-plan.md`), inaccurate grep-evidence claims (CA-07,
+corrected throughout this evidence package), a real `forge fmt` failure (CA-08, fixed),
+and this document's own count mismatch (CA-09/CA-10 — CA-09 concerned
+`docs/requirements-traceability.md`'s stale hash/count references, since corrected).
+
+Phase 7 may proceed once this remediation pass's own validation commands all pass
+(see the bottom of `artifacts/security-addendum/test-results.md`) and an independent
+re-audit confirms no P0/P1 remains. See `artifacts/security-addendum/test-results.md` for the exact
 commands and output substantiating every "no fix needed" and "fixed" row above.

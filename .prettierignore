@@ -6,3 +6,5 @@ broadcast
 pnpm-lock.yaml
 packages/contracts/lib
 tidyr-production-prd.md
+# External auditor evidence - not ours to reformat, preserved byte-for-byte as delivered
+audit/

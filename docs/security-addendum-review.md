@@ -23,10 +23,22 @@ review was concerned about, before this review started:
 - No generic `Call{target, callData}` execution surface exists anywhere in
   `SweepExecutor` or the adapters — confirmed by `grep -rn "struct Call\b"` across
   `packages/contracts/src` (no matches).
-- No Multicall3 reference exists anywhere in the codebase yet (`grep -rn "Multicall3"`
-  across `packages/` and `apps/` — no matches). It cannot currently be approved, made a
-  spender, or registered as anything, because nothing in the current code path touches
-  it at all.
+- Before this review, no Multicall3 reference existed anywhere in the codebase; an
+  earlier draft of this document claimed `rg -n -i multicall packages apps` produced no
+  matches at all. **That claim was imprecise and has been corrected** (Codex addendum
+  audit finding CA-07): the command actually returns many matches once vendored
+  dependencies are included — OpenZeppelin's own unrelated call-batching `Multicall.sol`
+  utility and forge-std's own `IMulticall3`/`MULTICALL3_ADDRESS` helper, both under
+  `packages/contracts/lib/`, neither related to TIDYR's adapter/spender risk. Restricting
+  the search to TIDYR's own production and test code
+  (`rg -n -i multicall packages/contracts/src packages/contracts/test packages/shared packages/routing packages/transaction-review packages/execution apps`)
+  found, at the time of the original review, zero matches in production source
+  (`packages/contracts/src`) and zero matches anywhere else — Multicall3 could not yet
+  be approved, made a spender, or registered as anything, because nothing touched it at
+  all. This review's own fix for CA-01 subsequently added a deliberate
+  `MULTICALL3_ADDRESS` constant and explicit-rejection check to
+  `packages/contracts/src/SweepExecutor.sol`, plus corresponding tests — those are now
+  legitimate, intentional matches, not evidence of a gap.
 - The only `.call{value: ...}` in `src/` sends the plan's own settled output to
   `plan.recipient` — a user-designated destination for the user's own funds, not an
   attacker-controlled arbitrary call.
