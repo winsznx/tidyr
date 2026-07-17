@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  AdapterKind,
   MAX_ACTIONS,
   MON_NATIVE_SENTINEL,
   sweepPlanSchema,
@@ -20,7 +21,7 @@ const basePlan: SweepPlan = {
     {
       tokenIn: "0x3333333333333333333333333333333333333333",
       amountIn: 200_000_000_000_000_000_000n,
-      adapter: "0x4444444444444444444444444444444444444444",
+      adapterKind: AdapterKind.PANCAKE_V2,
       minAmountOut: 100n,
       routeData: "0x1234",
       allowFailure: false,

@@ -75,7 +75,7 @@ contract SweepExecutorHandler is Test {
             swaps[0] = SweepPlanLib.SwapAction({
                 tokenIn: address(DUST),
                 amountIn: amount,
-                adapter: address(ADAPTER),
+                adapterKind: SweepPlanLib.AdapterKind.PANCAKE_V2,
                 minAmountOut: 1,
                 routeData: hex"12",
                 allowFailure: false
@@ -128,13 +128,19 @@ contract SweepExecutorInvariantsTest is Test {
     function setUp() public {
         permit2 = ISignatureTransfer(deployCode("Permit2.sol:Permit2"));
         wmon = new MockWMON();
-        executor = new SweepExecutor(address(permit2), address(wmon), address(this));
+        adapter = new MockAdapter();
+        // The handler only ever drives AdapterKind.PANCAKE_V2 swaps, but the two
+        // adapter slots must now be distinct addresses (follow-up re-audit finding:
+        // the constructor rejects a duplicate pair), so the UNISWAP_V3 slot gets its
+        // own unused mock instance.
+        MockAdapter unusedUniswapSlot = new MockAdapter();
+        executor = new SweepExecutor(
+            address(permit2), address(wmon), address(adapter), address(unusedUniswapSlot), address(this)
+        );
 
         dust1 = new MockERC20("Dust1", "DUST1");
         usdc = new MockERC20("USD Coin", "USDC");
-        adapter = new MockAdapter();
 
-        executor.registerAdapter(address(adapter));
         executor.registerOutputToken(address(usdc));
 
         handler = new SweepExecutorHandler(permit2, executor, dust1, usdc, adapter, 0xA11CE);

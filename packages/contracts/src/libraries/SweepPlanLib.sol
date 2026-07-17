@@ -11,10 +11,24 @@ library SweepPlanLib {
     /// `validatePlanShape` can be exercised independently of the executor.
     uint256 internal constant MAX_ACTIONS = 50;
 
+    /// @notice Closed set of adapters SweepExecutor will ever call. There is
+    /// deliberately no way to name an arbitrary adapter address in a plan (Codex
+    /// addendum re-audit finding RA-01): a prior design let the owner register any
+    /// contract and trusted that contract's self-reported `configurationFrozen()`
+    /// value, which a malicious or upgradeable adapter could forge. Each `AdapterKind`
+    /// resolves to one of exactly two immutable addresses fixed at SweepExecutor
+    /// construction (see `SweepExecutor.sol`) - there is no registry, nothing to
+    /// register, and nothing to forge. Solidity's ABI decoder itself rejects any
+    /// calldata value outside this enum's range before `executeSweep` ever runs.
+    enum AdapterKind {
+        PANCAKE_V2,
+        UNISWAP_V3
+    }
+
     struct SwapAction {
         address tokenIn;
         uint256 amountIn;
-        address adapter;
+        AdapterKind adapterKind;
         uint256 minAmountOut;
         bytes routeData;
         bool allowFailure;
@@ -157,7 +171,7 @@ library SweepPlanLib {
                 abi.encode(
                     actions[i].tokenIn,
                     actions[i].amountIn,
-                    actions[i].adapter,
+                    uint8(actions[i].adapterKind),
                     actions[i].minAmountOut,
                     keccak256(actions[i].routeData),
                     actions[i].allowFailure

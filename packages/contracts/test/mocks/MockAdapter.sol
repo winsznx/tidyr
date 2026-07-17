@@ -21,18 +21,19 @@ contract MockAdapter is IAdapter {
     uint256 public outputNumerator = 1;
     uint256 public outputDenominator = 1;
 
-    /// @dev Implements IFreezableAdapter so SweepExecutor.freezeConfiguration's
-    /// adapter-readiness check (CA-01/CA-02) can be exercised in tests. Defaults to
-    /// true (a real adapter would normally be frozen before the executor freezes);
-    /// tests that need to prove the revert-when-not-frozen path call `setFrozen(false)`.
-    bool public configurationFrozen = true;
+    /// @dev Mirrors the real adapters' own irreversible freeze flag (PancakeV2Adapter/
+    /// UniswapV3Adapter's `configurationFrozen`), which SweepExecutor.freezeConfiguration
+    /// now requires both fixed adapters to have already set (Codex addendum re-audit
+    /// follow-up: freeze must couple to adapter-level mutable config, not just
+    /// SweepExecutor's own output-token list).
+    bool public configurationFrozen;
 
     function setMode(Mode m) external {
         mode = m;
     }
 
-    function setFrozen(bool frozen) external {
-        configurationFrozen = frozen;
+    function freezeConfiguration() external {
+        configurationFrozen = true;
     }
 
     function setRatio(uint256 numerator, uint256 denominator) external {

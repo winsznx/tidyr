@@ -13,6 +13,15 @@ record of what was cross-verified and when. The actual assertions live in:
 
 ## Revision history
 
+- **2026-07-17 (Codex addendum re-audit remediation, RA-01):** `SwapAction.adapter`
+  (an arbitrary `address`) was replaced with `SwapAction.adapterKind`, a closed
+  `SweepPlanLib.AdapterKind` enum (`PANCAKE_V2 = 0`, `UNISWAP_V3 = 1`) ABI-encoded as
+  `uint8`. This closes the re-audit's P1 finding that `SweepExecutor.registerAdapter`
+  accepted arbitrary contracts and trusted their self-reported `configurationFrozen()`
+  value — see `docs/security-addendum-review.md`. There is no longer an adapter
+  registry at all: each `AdapterKind` resolves to one of exactly two immutable
+  addresses fixed at `SweepExecutor` construction. Vector A's expected hash changed as
+  a result (recorded below); no other field or golden-vector semantics changed.
 - **2026-07-17 (security addendum, pre-Phase-7 review):** `hashPlan` gained two new
   leading parameters, `chainId` and `executor`, bound explicitly for defense-in-depth
   and audit clarity — see `docs/security-addendum-review.md`. Permit2's own EIP-712
@@ -41,7 +50,7 @@ One swap action, one transfer action, no discards, no burns. Signed for chain ID
 | `displayManifestHash`   | `keccak256("display-manifest-vector-a")`                  |
 | `swaps[0].tokenIn`      | `0x3333333333333333333333333333333333333333`              |
 | `swaps[0].amountIn`     | `200000000000000000000` (200e18)                          |
-| `swaps[0].adapter`      | `0x4444444444444444444444444444444444444444`              |
+| `swaps[0].adapterKind`  | `AdapterKind.PANCAKE_V2` (`0`)                            |
 | `swaps[0].minAmountOut` | `100`                                                     |
 | `swaps[0].routeData`    | `0x1234`                                                  |
 | `swaps[0].allowFailure` | `false`                                                   |
@@ -50,7 +59,7 @@ One swap action, one transfer action, no discards, no burns. Signed for chain ID
 | `transfers[0].to`       | `0x2222222222222222222222222222222222222222`              |
 
 **Expected `executionPlanHash`:**
-`0xdf7a8dd0108003ffa8b036d6471d7a6479a56d02b6b7737737c398e3515100d1`
+`0xc277e8285240c296bf7df135856a7fad4a4e665f94c1f469e9cc6940f71e31d3`
 
 Derivation: computed by running `forge test -vvv` against
 `SweepPlanLibTest::test_vectorA_printHash` (the Solidity implementation), then
@@ -72,7 +81,7 @@ assumed/fabricated constant.
 | `chainId` changed                                                       | yes              |
 | `executor` address changed                                              | yes              |
 | `owner` changed                                                         | yes              |
-| `swaps[0].adapter` changed                                              | yes              |
+| `swaps[0].adapterKind` changed                                          | yes              |
 | `swaps[0].routeData` changed                                            | yes              |
 | `swaps[0].minAmountOut` +1                                              | yes              |
 | Compare `executionPlanHash` vs. `displayManifestHash` for the same plan | always different |
@@ -80,7 +89,8 @@ assumed/fabricated constant.
 Every row above is a committed regression test on both languages, not a one-off
 verification run (Codex addendum audit finding CA-04: an earlier pass verified this
 full set once via an ephemeral, non-retained mutation script, but the `owner`,
-`adapter`, `routeData`, and `minAmountOut` rows were not yet committed as tests).
+`adapter`/`adapterKind`, `routeData`, and `minAmountOut` rows were not yet committed
+as tests).
 
 ## Why two independent hashes (PRD §19.3)
 
@@ -88,8 +98,8 @@ full set once via an ephemeral, non-retained mutation script, but the `owner`,
 human-readable manifest with no ABI-level detail. `executionPlanHash` is `keccak256` of
 ABI-encoded struct fields, including per-action-array sub-hashes. These are different
 byte representations of related but distinct data (the display manifest omits
-`adapter`/`routeData`/`minAmountOut` details the contract needs); they must never be
-expected to collide, and the test suite explicitly asserts they don't for the same
+`adapterKind`/`routeData`/`minAmountOut` details the contract needs); they must never
+be expected to collide, and the test suite explicitly asserts they don't for the same
 logical plan.
 
 ## Reproducing this vector

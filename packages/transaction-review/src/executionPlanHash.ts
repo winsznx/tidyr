@@ -21,12 +21,19 @@ function hashSwapActions(actions: readonly SwapAction[]): Hex {
         [
           { type: "address" },
           { type: "uint256" },
-          { type: "address" },
+          { type: "uint8" },
           { type: "uint256" },
           { type: "bytes32" },
           { type: "bool" },
         ],
-        [a.tokenIn, a.amountIn, a.adapter, a.minAmountOut, keccak256(a.routeData), a.allowFailure],
+        [
+          a.tokenIn,
+          a.amountIn,
+          a.adapterKind,
+          a.minAmountOut,
+          keccak256(a.routeData),
+          a.allowFailure,
+        ],
       ),
     ),
   );

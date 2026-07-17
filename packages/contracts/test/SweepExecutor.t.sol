@@ -15,6 +15,35 @@ import {MockAdapter} from "./mocks/MockAdapter.sol";
 import {MockReentrantAdapter} from "./mocks/MockReentrantAdapter.sol";
 
 contract SweepExecutorTest is Test {
+    /// @dev Mirrors SweepPlanLib.SwapAction/SweepPlan field-for-field, except
+    /// `adapterKind` is a raw `uint8` instead of the `AdapterKind` enum. ABI encoding of
+    /// a struct is identical whether a given word-sized field is typed as an enum or its
+    /// underlying integer type - only decoding differs - so this lets
+    /// test_invalidAdapterKindOrdinal_revertsAtAbiDecode construct otherwise-valid
+    /// calldata carrying an out-of-range ordinal that Solidity's type system would
+    /// never let it express directly.
+    struct RawSwapAction {
+        address tokenIn;
+        uint256 amountIn;
+        uint8 adapterKind;
+        uint256 minAmountOut;
+        bytes routeData;
+        bool allowFailure;
+    }
+
+    struct RawSweepPlan {
+        address owner;
+        address recipient;
+        address outputToken;
+        uint256 deadline;
+        uint256 nonce;
+        bytes32 displayManifestHash;
+        RawSwapAction[] swaps;
+        SweepPlanLib.TransferAction[] transfers;
+        SweepPlanLib.DiscardAction[] discards;
+        SweepPlanLib.BurnAction[] burns;
+    }
+
     string internal constant PERMIT_BATCH_WITNESS_STUB =
         "PermitBatchWitnessTransferFrom(TokenPermissions[] permitted,address spender,uint256 nonce,uint256 deadline,";
     bytes32 internal constant TOKEN_PERMISSIONS_TYPEHASH = keccak256("TokenPermissions(address token,uint256 amount)");
@@ -25,7 +54,13 @@ contract SweepExecutorTest is Test {
     MockERC20 internal dust1;
     MockERC20 internal usdc;
     MockBurnableERC20 internal dust4;
+    /// @dev Wired as the PANCAKE_V2 slot at construction; used by every test below that
+    /// exercises AdapterKind.PANCAKE_V2.
     MockAdapter internal adapter;
+    /// @dev Wired as the UNISWAP_V3 slot at construction. Exists mainly so the executor
+    /// under test genuinely has two distinct, independently controllable adapters
+    /// (matching production topology), not just one address reused twice.
+    MockAdapter internal uniswapAdapter;
 
     uint256 internal ownerKey = 0xA11CE;
     address internal owner;
@@ -35,17 +70,18 @@ contract SweepExecutorTest is Test {
     function setUp() public {
         permit2 = ISignatureTransfer(deployCode("Permit2.sol:Permit2"));
         wmon = new MockWMON();
-        executor = new SweepExecutor(address(permit2), address(wmon), executorOwner);
+        adapter = new MockAdapter();
+        uniswapAdapter = new MockAdapter();
+        executor = new SweepExecutor(
+            address(permit2), address(wmon), address(adapter), address(uniswapAdapter), executorOwner
+        );
 
         dust1 = new MockERC20("Dust1", "DUST1");
         usdc = new MockERC20("USD Coin", "USDC");
         dust4 = new MockBurnableERC20("Dust4", "DUST4");
-        adapter = new MockAdapter();
 
-        vm.startPrank(executorOwner);
-        executor.registerAdapter(address(adapter));
+        vm.prank(executorOwner);
         executor.registerOutputToken(address(usdc));
-        vm.stopPrank();
 
         owner = vm.addr(ownerKey);
         dust1.mint(owner, 1_000 ether);
@@ -77,13 +113,23 @@ contract SweepExecutorTest is Test {
     }
 
     function _sign(SweepPlanLib.SweepPlan memory plan) internal view returns (bytes memory signature) {
+        return _signFor(plan, address(executor));
+    }
+
+    /// @dev Generalized over the spender so the reentrancy test below can sign against a
+    /// second, independently-constructed SweepExecutor without duplicating this logic.
+    function _signFor(SweepPlanLib.SweepPlan memory plan, address spender)
+        internal
+        view
+        returns (bytes memory signature)
+    {
         (address[] memory tokens, uint256[] memory amounts) = SweepPlanLib.aggregateTokenAmounts(plan);
         bytes32[] memory tokenPermissionHashes = new bytes32[](tokens.length);
         for (uint256 i = 0; i < tokens.length; i++) {
             tokenPermissionHashes[i] = keccak256(abi.encode(TOKEN_PERMISSIONS_TYPEHASH, tokens[i], amounts[i]));
         }
 
-        bytes32 executionPlanHash = SweepPlanLib.hashPlan(plan, block.chainid, address(executor));
+        bytes32 executionPlanHash = SweepPlanLib.hashPlan(plan, block.chainid, spender);
         bytes32 witness = TidyrWitness.hashWitness(executionPlanHash);
         bytes32 typeHash = keccak256(abi.encodePacked(PERMIT_BATCH_WITNESS_STUB, TidyrWitness.WITNESS_TYPE_STRING));
 
@@ -91,7 +137,7 @@ contract SweepExecutorTest is Test {
             abi.encode(
                 typeHash,
                 keccak256(abi.encodePacked(tokenPermissionHashes)),
-                address(executor), // spender is SweepExecutor itself
+                spender,
                 plan.nonce,
                 plan.deadline,
                 witness
@@ -119,7 +165,7 @@ contract SweepExecutorTest is Test {
         swaps[0] = SweepPlanLib.SwapAction({
             tokenIn: address(dust1),
             amountIn: 100 ether,
-            adapter: address(adapter),
+            adapterKind: SweepPlanLib.AdapterKind.PANCAKE_V2,
             minAmountOut: 1,
             routeData: hex"12",
             allowFailure: false
@@ -141,7 +187,7 @@ contract SweepExecutorTest is Test {
         swaps[0] = SweepPlanLib.SwapAction({
             tokenIn: address(dust1),
             amountIn: 100 ether,
-            adapter: address(adapter),
+            adapterKind: SweepPlanLib.AdapterKind.PANCAKE_V2,
             minAmountOut: 1,
             routeData: hex"12",
             allowFailure: false
@@ -201,7 +247,7 @@ contract SweepExecutorTest is Test {
         swaps[0] = SweepPlanLib.SwapAction({
             tokenIn: address(dust1),
             amountIn: 100 ether,
-            adapter: address(adapter),
+            adapterKind: SweepPlanLib.AdapterKind.PANCAKE_V2,
             minAmountOut: 1,
             routeData: hex"12",
             allowFailure: true
@@ -225,7 +271,7 @@ contract SweepExecutorTest is Test {
         swaps[0] = SweepPlanLib.SwapAction({
             tokenIn: address(dust1),
             amountIn: 100 ether,
-            adapter: address(adapter),
+            adapterKind: SweepPlanLib.AdapterKind.PANCAKE_V2,
             minAmountOut: 1,
             routeData: hex"12",
             allowFailure: false
@@ -246,7 +292,7 @@ contract SweepExecutorTest is Test {
         swaps[0] = SweepPlanLib.SwapAction({
             tokenIn: address(dust1),
             amountIn: 100 ether,
-            adapter: address(adapter),
+            adapterKind: SweepPlanLib.AdapterKind.PANCAKE_V2,
             minAmountOut: 50 ether,
             routeData: hex"12",
             allowFailure: true // must NOT save it - a "successful" under-delivery is never tolerated
@@ -333,24 +379,47 @@ contract SweepExecutorTest is Test {
         executor.executeSweep(plan, sig);
     }
 
-    function test_unregisteredAdapter_reverts() public {
-        MockAdapter rogue = new MockAdapter();
+    /// @dev Codex addendum re-audit finding RA-01: SweepExecutor V1 has no adapter
+    /// registry to bypass - there is no address for a "rogue" adapter to be. The
+    /// property this architecture actually relies on is that Solidity's ABI decoder
+    /// itself rejects any AdapterKind ordinal outside {PANCAKE_V2, UNISWAP_V3} before
+    /// executeSweep's body ever runs. This constructs calldata with an out-of-range
+    /// ordinal (2) directly, bypassing the compiler's own enum typing, to prove the
+    /// decoder - not a runtime allowlist - is what rejects it.
+    function test_invalidAdapterKindOrdinal_revertsAtAbiDecode() public {
         SweepPlanLib.SweepPlan memory plan = _emptyPlan(address(usdc));
-        SweepPlanLib.SwapAction[] memory swaps = new SweepPlanLib.SwapAction[](1);
-        swaps[0] = SweepPlanLib.SwapAction({
+
+        RawSwapAction[] memory rawSwaps = new RawSwapAction[](1);
+        rawSwaps[0] = RawSwapAction({
             tokenIn: address(dust1),
             amountIn: 100 ether,
-            adapter: address(rogue),
+            adapterKind: 2, // out of {0,1} range
             minAmountOut: 1,
             routeData: hex"12",
             allowFailure: false
         });
-        plan.swaps = swaps;
 
         bytes memory sig = _sign(plan);
+        bytes memory badCalldata = abi.encodeWithSelector(
+            SweepExecutor.executeSweep.selector,
+            RawSweepPlan({
+                owner: plan.owner,
+                recipient: plan.recipient,
+                outputToken: plan.outputToken,
+                deadline: plan.deadline,
+                nonce: plan.nonce,
+                displayManifestHash: plan.displayManifestHash,
+                swaps: rawSwaps,
+                transfers: plan.transfers,
+                discards: plan.discards,
+                burns: plan.burns
+            }),
+            sig
+        );
+
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(SweepExecutor.AdapterNotAllowed.selector, address(rogue)));
-        executor.executeSweep(plan, sig);
+        (bool ok,) = address(executor).call(badCalldata);
+        assertFalse(ok, "out-of-range AdapterKind ordinal must be rejected at ABI decode");
     }
 
     function test_ambiguousSwapToken_reverts() public {
@@ -359,7 +428,7 @@ contract SweepExecutorTest is Test {
         swaps[0] = SweepPlanLib.SwapAction({
             tokenIn: address(usdc), // same as output/settlement token
             amountIn: 100 ether,
-            adapter: address(adapter),
+            adapterKind: SweepPlanLib.AdapterKind.PANCAKE_V2,
             minAmountOut: 1,
             routeData: hex"12",
             allowFailure: false
@@ -413,24 +482,56 @@ contract SweepExecutorTest is Test {
     }
 
     // -----------------------------------------------------------------
-    // Security addendum (pre-Phase-7 review): freeze + Multicall3 rejection
+    // Constructor validation of the two fixed adapter slots (follow-up re-audit)
     // -----------------------------------------------------------------
 
-    function test_freezeConfiguration_blocksFurtherAdapterAndOutputTokenChanges() public {
-        MockAdapter another = new MockAdapter();
+    /// @dev The constructor only checked nonzero-ness of either adapter slot, so an
+    /// EOA, Multicall3's own address, or a duplicate pair could be wired in as an
+    /// "immutable, audited adapter" with no further validation. This proves an EOA
+    /// (no code) is rejected.
+    function test_constructor_rejectsAdapterWithNoCode() public {
+        address eoa = address(0xFEED);
+        vm.expectRevert(abi.encodeWithSelector(SweepExecutor.AdapterHasNoCode.selector, eoa));
+        new SweepExecutor(address(permit2), address(wmon), eoa, address(uniswapAdapter), executorOwner);
+
+        vm.expectRevert(abi.encodeWithSelector(SweepExecutor.AdapterHasNoCode.selector, eoa));
+        new SweepExecutor(address(permit2), address(wmon), address(adapter), eoa, executorOwner);
+    }
+
+    function test_constructor_rejectsDuplicateAdapterPair() public {
+        vm.expectRevert(abi.encodeWithSelector(SweepExecutor.DuplicateAdapterAddress.selector, address(adapter)));
+        new SweepExecutor(address(permit2), address(wmon), address(adapter), address(adapter), executorOwner);
+    }
+
+    /// @dev The real, verified Multicall3 address, wired into either fixed adapter
+    /// slot, must be rejected the same way any registry-based design should have -
+    /// except here it's checked once, at construction, against an immutable slot.
+    function test_constructor_rejectsMulticall3InEitherSlot() public {
+        address multicall3 = executor.MULTICALL3_ADDRESS();
+
+        vm.expectRevert(SweepExecutor.AdapterIsMulticall3.selector);
+        new SweepExecutor(address(permit2), address(wmon), multicall3, address(uniswapAdapter), executorOwner);
+
+        vm.expectRevert(SweepExecutor.AdapterIsMulticall3.selector);
+        new SweepExecutor(address(permit2), address(wmon), address(adapter), multicall3, executorOwner);
+    }
+
+    // -----------------------------------------------------------------
+    // Security addendum (pre-Phase-7 review): freeze + closed adapter set (RA-01)
+    // -----------------------------------------------------------------
+
+    function _freezeBothAdapters() internal {
+        adapter.freezeConfiguration();
+        uniswapAdapter.freezeConfiguration();
+    }
+
+    function test_freezeConfiguration_blocksFurtherOutputTokenChanges() public {
         MockERC20 anotherOutput = new MockERC20("Another", "ANO");
+        _freezeBothAdapters();
 
         vm.prank(executorOwner);
         executor.freezeConfiguration();
         assertTrue(executor.configurationFrozen());
-
-        vm.prank(executorOwner);
-        vm.expectRevert(SweepExecutor.ConfigurationIsFrozen.selector);
-        executor.registerAdapter(address(another));
-
-        vm.prank(executorOwner);
-        vm.expectRevert(SweepExecutor.ConfigurationIsFrozen.selector);
-        executor.removeAdapter(address(adapter));
 
         vm.prank(executorOwner);
         vm.expectRevert(SweepExecutor.ConfigurationIsFrozen.selector);
@@ -442,12 +543,15 @@ contract SweepExecutorTest is Test {
     }
 
     function test_freezeConfiguration_onlyOwner() public {
+        // Reverts on the caller check before ever reaching the adapter-freeze
+        // requirement, so this needs no adapter setup.
         vm.expectRevert();
         executor.freezeConfiguration();
     }
 
     function test_freezeConfiguration_doesNotBlockRecovery() public {
         dust1.mint(address(executor), 5 ether);
+        _freezeBothAdapters();
 
         vm.prank(executorOwner);
         executor.freezeConfiguration();
@@ -457,112 +561,104 @@ contract SweepExecutorTest is Test {
         assertEq(dust1.balanceOf(executorOwner), 5 ether);
     }
 
-    /// @dev Verified real Multicall3 deployment (docs/research/external-addresses.md) -
-    /// a batched-read-only helper anybody can instruct to call arbitrary targets with
-    /// arbitrary calldata. If it were ever registered as an adapter, an attacker could
-    /// have Multicall3 call `token.transferFrom(victim, attacker, allowance)` for anyone
-    /// who had approved Multicall3. TIDYR never approves Multicall3 for anything and
-    /// never registers it as an adapter - this test proves the latter is rejected the
-    /// same way any other unregistered/arbitrary address would be, with nothing special
-    /// carved out for it.
-    function test_multicall3_rejectedAsUnregisteredAdapter() public {
-        address multicall3 = 0xcA11bde05977b3631167028862bE2a173976CA11;
+    /// @dev Follow-up re-audit finding: RA-01 made adapter *addresses* immutable, but
+    /// initially left `freezeConfiguration` checking nothing about either adapter's own
+    /// mutable intermediate-asset allowlist - so a "frozen" executor could still route
+    /// through an adapter whose own routing surface an owner could keep changing. This
+    /// proves freeze now reverts unless both fixed adapters have already frozen
+    /// themselves, one at a time.
+    function test_freezeConfiguration_revertsUnlessBothAdaptersFrozen() public {
+        vm.prank(executorOwner);
+        vm.expectRevert(abi.encodeWithSelector(SweepExecutor.AdapterNotYetFrozen.selector, address(adapter)));
+        executor.freezeConfiguration();
 
+        adapter.freezeConfiguration();
+        vm.prank(executorOwner);
+        vm.expectRevert(abi.encodeWithSelector(SweepExecutor.AdapterNotYetFrozen.selector, address(uniswapAdapter)));
+        executor.freezeConfiguration();
+
+        uniswapAdapter.freezeConfiguration();
+        vm.prank(executorOwner);
+        executor.freezeConfiguration();
+        assertTrue(executor.configurationFrozen());
+    }
+
+    /// @dev Swaps themselves never depend on `configurationFrozen` at all (frozen or
+    /// not, both fixed adapters remain reachable via their `AdapterKind`) - only the
+    /// output-token allowlist mutation functions are gated by it.
+    function test_swapsUnaffectedByFreezeState() public {
         SweepPlanLib.SweepPlan memory plan = _emptyPlan(address(usdc));
         SweepPlanLib.SwapAction[] memory swaps = new SweepPlanLib.SwapAction[](1);
         swaps[0] = SweepPlanLib.SwapAction({
             tokenIn: address(dust1),
-            amountIn: 1 ether,
-            adapter: multicall3,
-            minAmountOut: 1,
-            routeData: hex"",
-            allowFailure: false
-        });
-        plan.swaps = swaps;
-
-        bytes memory sig = _sign(plan);
-        vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(SweepExecutor.AdapterNotAllowed.selector, multicall3));
-        executor.executeSweep(plan, sig);
-
-        assertFalse(executor.allowedAdapters(multicall3));
-    }
-
-    /// @dev Codex addendum audit finding CA-01 (P1): the prior test only proved the
-    /// *default* (never-registered) state was rejected - it did not prove that an owner
-    /// could not register Multicall3 in the first place, after which a permanent freeze
-    /// would have blessed it forever. This directly reproduces and closes that gap:
-    /// `registerAdapter` itself must revert for Multicall3's real, verified address.
-    function test_registerAdapter_rejectsMulticall3Explicitly() public {
-        address multicall3 = executor.MULTICALL3_ADDRESS();
-
-        vm.prank(executorOwner);
-        vm.expectRevert(SweepExecutor.AdapterIsMulticall3.selector);
-        executor.registerAdapter(multicall3);
-
-        assertFalse(executor.allowedAdapters(multicall3));
-    }
-
-    /// @dev CA-01/CA-02: freezing SweepExecutor must not be possible while a currently
-    /// registered adapter's own configuration remains mutable - otherwise a "frozen"
-    /// executor could still route through an adapter whose routing surface (e.g.
-    /// intermediate-asset allowlist) an attacker or compromised adapter-owner can still
-    /// change after the fact.
-    function test_freezeConfiguration_revertsIfRegisteredAdapterNotFrozen() public {
-        adapter.setFrozen(false);
-
-        vm.prank(executorOwner);
-        vm.expectRevert(abi.encodeWithSelector(SweepExecutor.RegisteredAdapterNotFrozen.selector, address(adapter)));
-        executor.freezeConfiguration();
-
-        assertFalse(executor.configurationFrozen());
-    }
-
-    function test_freezeConfiguration_succeedsWhenAllRegisteredAdaptersFrozen() public {
-        adapter.setFrozen(true);
-
-        vm.prank(executorOwner);
-        executor.freezeConfiguration();
-
-        assertTrue(executor.configurationFrozen());
-    }
-
-    /// @dev An adapter that was registered and later removed no longer needs to be
-    /// frozen itself - it is unreachable, so its own mutability is no longer relevant
-    /// to the executor's security boundary.
-    function test_freezeConfiguration_ignoresRemovedAdapters() public {
-        adapter.setFrozen(false);
-
-        vm.prank(executorOwner);
-        executor.removeAdapter(address(adapter));
-
-        vm.prank(executorOwner);
-        executor.freezeConfiguration();
-
-        assertTrue(executor.configurationFrozen());
-    }
-
-    function test_maliciousReentrantAdapter_reverts() public {
-        MockReentrantAdapter reentrant = new MockReentrantAdapter(executor);
-        vm.prank(executorOwner);
-        executor.registerAdapter(address(reentrant));
-
-        SweepPlanLib.SweepPlan memory plan = _emptyPlan(address(usdc));
-        SweepPlanLib.SwapAction[] memory swaps = new SweepPlanLib.SwapAction[](1);
-        swaps[0] = SweepPlanLib.SwapAction({
-            tokenIn: address(dust1),
-            amountIn: 10 ether,
-            adapter: address(reentrant),
+            amountIn: 100 ether,
+            adapterKind: SweepPlanLib.AdapterKind.PANCAKE_V2,
             minAmountOut: 1,
             routeData: hex"12",
             allowFailure: false
         });
         plan.swaps = swaps;
 
-        bytes memory sig = _sign(plan);
+        _freezeBothAdapters();
+        vm.prank(executorOwner);
+        executor.freezeConfiguration();
+
+        _execute(plan);
+        assertEq(usdc.balanceOf(recipient), 100 ether);
+    }
+
+    /// @dev Codex addendum re-audit finding RA-01: `registerAdapter`/`removeAdapter`
+    /// must no longer exist on SweepExecutor V1 at all - not merely reject bad input.
+    /// A low-level call using the old function selector must fail because the function
+    /// has been removed from the contract entirely (no fallback is defined), which is a
+    /// stronger guarantee than any runtime allowlist check could provide. If either
+    /// function is ever reintroduced without updating this test, the call below starts
+    /// succeeding and the assertion catches the regression.
+    function test_registerAdapterSelector_noLongerExists() public {
+        bytes memory data = abi.encodeWithSignature("registerAdapter(address)", address(0x1234));
+        (bool ok,) = address(executor).call(data);
+        assertFalse(ok, "registerAdapter must not exist on SweepExecutor V1 (RA-01)");
+    }
+
+    function test_removeAdapterSelector_noLongerExists() public {
+        bytes memory data = abi.encodeWithSignature("removeAdapter(address)", address(0x1234));
+        (bool ok,) = address(executor).call(data);
+        assertFalse(ok, "removeAdapter must not exist on SweepExecutor V1 (RA-01)");
+    }
+
+    /// @dev The reentrant adapter must be wired at construction now that adapters are
+    /// immutable (RA-01), so this test deploys its own SweepExecutor instance with the
+    /// reentrant mock in the UNISWAP_V3 slot, predicting that executor's address ahead
+    /// of deployment so MockReentrantAdapter can be constructed with a valid callback
+    /// target.
+    function test_maliciousReentrantAdapter_reverts() public {
+        uint256 deployerNonce = vm.getNonce(address(this));
+        address predictedExecutor = vm.computeCreateAddress(address(this), deployerNonce + 1);
+
+        MockReentrantAdapter reentrant = new MockReentrantAdapter(SweepExecutor(payable(predictedExecutor)));
+        SweepExecutor reentrantExecutor =
+            new SweepExecutor(address(permit2), address(wmon), address(adapter), address(reentrant), executorOwner);
+        assertEq(address(reentrantExecutor), predictedExecutor, "nonce-based address prediction drifted");
+
+        vm.prank(executorOwner);
+        reentrantExecutor.registerOutputToken(address(usdc));
+
+        SweepPlanLib.SweepPlan memory plan = _emptyPlan(address(usdc));
+        SweepPlanLib.SwapAction[] memory swaps = new SweepPlanLib.SwapAction[](1);
+        swaps[0] = SweepPlanLib.SwapAction({
+            tokenIn: address(dust1),
+            amountIn: 10 ether,
+            adapterKind: SweepPlanLib.AdapterKind.UNISWAP_V3,
+            minAmountOut: 1,
+            routeData: hex"12",
+            allowFailure: false
+        });
+        plan.swaps = swaps;
+
+        bytes memory sig = _signFor(plan, address(reentrantExecutor));
         vm.prank(owner);
         vm.expectRevert(); // ReentrancyGuardReentrantCall, surfaced through the adapter's try/catch as a bubbled revert
-        executor.executeSweep(plan, sig);
+        reentrantExecutor.executeSweep(plan, sig);
     }
 
     // -----------------------------------------------------------------
@@ -577,7 +673,7 @@ contract SweepExecutorTest is Test {
         swaps[0] = SweepPlanLib.SwapAction({
             tokenIn: address(dust1),
             amountIn: amountIn,
-            adapter: address(adapter),
+            adapterKind: SweepPlanLib.AdapterKind.PANCAKE_V2,
             minAmountOut: 1,
             routeData: hex"12",
             allowFailure: false

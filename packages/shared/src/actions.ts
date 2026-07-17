@@ -34,10 +34,26 @@ export const MAX_ACTIONS = 50;
  */
 export const MON_NATIVE_SENTINEL: Address = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
+/**
+ * Closed set of adapters SweepExecutor will ever call, mirroring
+ * `SweepPlanLib.AdapterKind` exactly (Codex addendum re-audit finding RA-01). There is
+ * deliberately no way to name an arbitrary adapter address in a plan — each kind
+ * resolves on-chain to one of exactly two immutable addresses fixed at SweepExecutor
+ * construction. Values are the enum's ABI-encoded `uint8` ordinals and must never be
+ * reordered.
+ */
+export const AdapterKind = {
+  PANCAKE_V2: 0,
+  UNISWAP_V3: 1,
+} as const;
+export type AdapterKind = (typeof AdapterKind)[keyof typeof AdapterKind];
+
+const adapterKindSchema = z.union([z.literal(0), z.literal(1)]);
+
 export const swapActionSchema = z.object({
   tokenIn: addressSchema,
   amountIn: uint256Schema,
-  adapter: addressSchema,
+  adapterKind: adapterKindSchema,
   minAmountOut: uint256Schema,
   routeData: hexSchema,
   allowFailure: z.boolean(),

@@ -45,7 +45,6 @@ contract SweepExecutorAdapterIntegrationTest is Test {
     function setUp() public {
         permit2 = ISignatureTransfer(deployCode("Permit2.sol:Permit2"));
         wmon = new MockWMON();
-        executor = new SweepExecutor(address(permit2), address(wmon), executorOwner);
 
         dust1 = new MockERC20("Dust1", "DUST1");
         usdc = new MockERC20("USDC", "USDC");
@@ -66,11 +65,14 @@ contract SweepExecutorAdapterIntegrationTest is Test {
         v3Router.setRatio(1, 2); // 2 DUST1 -> 1 USDC
         v3Adapter = new UniswapV3Adapter(address(v3Router), address(wmon), executorOwner);
 
-        vm.startPrank(executorOwner);
-        executor.registerAdapter(address(pancakeAdapter));
-        executor.registerAdapter(address(v3Adapter));
+        // Both real adapters are now fixed, immutable constructor arguments (Codex
+        // addendum re-audit finding RA-01) - there is no registerAdapter step anymore.
+        executor = new SweepExecutor(
+            address(permit2), address(wmon), address(pancakeAdapter), address(v3Adapter), executorOwner
+        );
+
+        vm.prank(executorOwner);
         executor.registerOutputToken(address(usdc));
-        vm.stopPrank();
 
         owner = vm.addr(ownerKey);
         dust1.mint(owner, 1_000 ether);
@@ -110,7 +112,7 @@ contract SweepExecutorAdapterIntegrationTest is Test {
         swaps[0] = SweepPlanLib.SwapAction({
             tokenIn: address(dust1),
             amountIn: 1_000 ether,
-            adapter: address(pancakeAdapter),
+            adapterKind: SweepPlanLib.AdapterKind.PANCAKE_V2,
             minAmountOut: 1,
             routeData: abi.encode(path),
             allowFailure: false
@@ -144,7 +146,7 @@ contract SweepExecutorAdapterIntegrationTest is Test {
         swaps[0] = SweepPlanLib.SwapAction({
             tokenIn: address(dust1),
             amountIn: 1_000 ether,
-            adapter: address(v3Adapter),
+            adapterKind: SweepPlanLib.AdapterKind.UNISWAP_V3,
             minAmountOut: 1,
             routeData: abi.encodePacked(address(dust1), uint24(3000), address(usdc)),
             allowFailure: false

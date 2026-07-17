@@ -12,20 +12,19 @@ contract SweepPlanLibTest is Test {
     address constant RECIPIENT = 0x2222222222222222222222222222222222222222;
     address constant OUTPUT_TOKEN = 0x754704Bc059F8C67012fEd69BC8A327a5aafb603; // USDC (Monad)
     address constant TOKEN_IN = 0x3333333333333333333333333333333333333333;
-    address constant ADAPTER = 0x4444444444444444444444444444444444444444;
     uint256 constant TEST_CHAIN_ID = 143; // Monad mainnet
     address constant TEST_EXECUTOR = 0x9999999999999999999999999999999999999999;
 
     /// @dev Golden vector A: one swap, one transfer, no discards/burns.
     /// Independently reproduced in packages/transaction-review/src/executionPlanHash.test.ts
-    bytes32 constant VECTOR_A_EXPECTED_HASH = 0xdf7a8dd0108003ffa8b036d6471d7a6479a56d02b6b7737737c398e3515100d1;
+    bytes32 constant VECTOR_A_EXPECTED_HASH = 0xc277e8285240c296bf7df135856a7fad4a4e665f94c1f469e9cc6940f71e31d3;
 
     function _vectorA() internal pure returns (SweepPlanLib.SweepPlan memory plan) {
         SweepPlanLib.SwapAction[] memory swaps = new SweepPlanLib.SwapAction[](1);
         swaps[0] = SweepPlanLib.SwapAction({
             tokenIn: TOKEN_IN,
             amountIn: 200 ether,
-            adapter: ADAPTER,
+            adapterKind: SweepPlanLib.AdapterKind.PANCAKE_V2,
             minAmountOut: 100,
             routeData: hex"1234",
             allowFailure: false
@@ -113,8 +112,8 @@ contract SweepPlanLibTest is Test {
     }
 
     /// @dev Codex addendum audit finding CA-04: this and the four tests below close a
-    /// real gap - chainId/executor/owner/adapter/routeData/minAmountOut sensitivity was
-    /// verified once by an ephemeral, non-retained script, but never committed as
+    /// real gap - chainId/executor/owner/adapterKind/routeData/minAmountOut sensitivity
+    /// was verified once by an ephemeral, non-retained script, but never committed as
     /// regression coverage.
     function test_ownerChangesHash() public pure {
         SweepPlanLib.SweepPlan memory a = _vectorA();
@@ -126,10 +125,10 @@ contract SweepPlanLibTest is Test {
         );
     }
 
-    function test_adapterChangesHash() public pure {
+    function test_adapterKindChangesHash() public pure {
         SweepPlanLib.SweepPlan memory a = _vectorA();
         SweepPlanLib.SweepPlan memory b = _vectorA();
-        b.swaps[0].adapter = 0x7777777777777777777777777777777777777777;
+        b.swaps[0].adapterKind = SweepPlanLib.AdapterKind.UNISWAP_V3;
         assertTrue(
             SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR)
                 != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR)
@@ -181,7 +180,7 @@ contract SweepPlanLibTest is Test {
         swaps[1] = SweepPlanLib.SwapAction({
             tokenIn: TOKEN_IN,
             amountIn: 10 ether,
-            adapter: ADAPTER,
+            adapterKind: SweepPlanLib.AdapterKind.PANCAKE_V2,
             minAmountOut: 1,
             routeData: hex"56",
             allowFailure: true

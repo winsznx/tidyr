@@ -11,18 +11,54 @@ import {TidyrWitness} from "./libraries/TidyrWitness.sol";
 import {IAdapter} from "./interfaces/IAdapter.sol";
 import {IBurnable} from "./interfaces/IBurnable.sol";
 import {IWMON} from "./interfaces/IWMON.sol";
-import {IFreezableAdapter} from "./interfaces/IFreezableAdapter.sol";
+
+/// @dev Narrow read-only view onto a fixed adapter's own freeze flag. Used only
+/// against `SweepExecutor.PANCAKE_V2_ADAPTER`/`UNISWAP_V3_ADAPTER` - two specific,
+/// immutable-address, audited contracts fixed at construction - never an arbitrary or
+/// attacker-influenceable address. See `SweepExecutor`'s contract-level note.
+interface IFreezeCheck {
+    function configurationFrozen() external view returns (bool);
+}
 
 /// @title SweepExecutor
 /// @notice TIDYR's core execution contract. Pulls exactly the tokens a signed plan
 /// authorizes (via a Permit2 witness bound to the plan's executionPlanHash), runs
-/// allowlisted adapter swaps, performs transfers/discards/burns, settles the plan's
-/// output to its recipient, and returns any unconsumed input to the plan's owner.
+/// swaps through exactly two immutable, audited adapters, performs
+/// transfers/discards/burns, settles the plan's output to its recipient, and returns
+/// any unconsumed input to the plan's owner.
 /// @dev Immutable, non-upgradeable, no delegatecall, no arbitrary external targets.
 /// Reflects PRD §19 corrections: no executor-side RevokeAction (§19.2), plan-fund
 /// isolation from pre-existing balances (§19.10), and the corrected allowFailure
 /// semantics where a low-output "success" is treated as an adapter invariant
 /// violation, not a soft failure (§19.9).
+///
+/// V1 has no owner-managed adapter registry (Codex addendum re-audit finding RA-01,
+/// superseding CA-01/CA-02's earlier registry-plus-freeze design). That design let the
+/// owner register any contract and trusted that contract's self-reported
+/// `configurationFrozen()` value - a malicious or upgradeable adapter could forge
+/// `true` while remaining mutable, so a "frozen" executor never actually established an
+/// immutable reviewed execution boundary. There is nothing left to forge: every
+/// `SwapAction.adapterKind` resolves to one of exactly two addresses fixed at
+/// construction and never changeable afterward. A new DEX integration requires a new
+/// SweepExecutor deployment, not a registry change.
+///
+/// A follow-up narrow re-audit correctly noted two remaining gaps in that design:
+/// (1) the constructor accepted any nonzero address for either adapter slot - an EOA,
+/// a duplicate, or Multicall3's own address - with no validation beyond nonzero, and
+/// (2) freezing this contract said nothing about whether the two fixed adapters'
+/// *own* mutable configuration (their `allowedIntermediateAssets`) was also locked,
+/// so a "frozen" executor could still route through an adapter whose intermediate-
+/// asset allowlist an owner could keep changing. Both are addressed below: the
+/// constructor now rejects EOAs (`extcodesize == 0`), a duplicate pair, and
+/// Multicall3's real, verified address; and `freezeConfiguration` now requires both
+/// fixed adapters to have already frozen themselves. This is not a reintroduction of
+/// RA-01's forgeable-registry pattern - it reads `configurationFrozen()` from exactly
+/// the two specific, immutable-address contracts fixed at construction (not an
+/// attacker-influenceable, arbitrary-address registry). What it cannot do from inside
+/// a constructor is prove the deployed bytecode at those addresses is genuinely the
+/// audited `PancakeV2Adapter`/`UniswapV3Adapter` source - that is a deployment-script
+/// and code-verification responsibility (Phase 9), the same trust boundary every
+/// immutable dependency here (`PERMIT2`, `WMON`) already relies on.
 contract SweepExecutor is Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -35,36 +71,32 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
 
     ISignatureTransfer public immutable PERMIT2;
     IWMON public immutable WMON;
+
+    /// @dev The only two adapters SweepExecutor will ever call, resolved from each
+    /// swap's `AdapterKind`. Fixed at construction, never changeable - see the
+    /// contract-level note above.
+    IAdapter public immutable PANCAKE_V2_ADAPTER;
+    IAdapter public immutable UNISWAP_V3_ADAPTER;
+
+    /// @dev Verified real Multicall3 deployment (docs/research/external-addresses.md).
+    /// Explicitly rejected as either adapter slot at construction - see the
+    /// contract-level note above.
+    address public constant MULTICALL3_ADDRESS = 0xcA11bde05977b3631167028862bE2a173976CA11;
+
     address public constant DEAD = 0x000000000000000000000000000000000000dEaD;
 
     /// @dev Matches packages/shared/src/actions.ts::MON_NATIVE_SENTINEL exactly.
     address public constant MON_NATIVE_SENTINEL = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
-    /// @dev Verified live on Monad mainnet (docs/research/external-addresses.md). A
-    /// read-only batched-call helper that accepts arbitrary target/calldata - explicitly
-    /// and permanently barred from ever being registered as an adapter, regardless of
-    /// owner action, per Codex addendum audit finding CA-01.
-    address public constant MULTICALL3_ADDRESS = 0xcA11bde05977b3631167028862bE2a173976CA11;
-
     mapping(address => uint256) public nonces;
-    mapping(address => bool) public allowedAdapters;
     mapping(address => bool) public allowedOutputTokens;
 
-    /// @dev Enumerable registry of every address ever registered via `registerAdapter`,
-    /// so `freezeConfiguration` can require each currently-allowed adapter to itself be
-    /// frozen (CA-01/CA-02) - `allowedAdapters` alone cannot be iterated.
-    address[] private _registeredAdapterList;
-    mapping(address => bool) private _everRegisteredAsAdapter;
-
-    /// @dev Security-addendum hardening (pre-Phase-7 review): once true, the adapter
-    /// and output-token registries can never change again. Mitigates a compromised- or
-    /// coerced-owner registering a malicious adapter after users have started trusting
-    /// this deployment. A new DEX integration after freezing requires a new
-    /// SweepExecutor deployment, not a silent change to this one's security boundary.
+    /// @dev Once true, the output-token registry can never change again. Mitigates a
+    /// compromised- or coerced-owner adding an unreviewed output asset after users have
+    /// started trusting this deployment. Adapters need no equivalent flag - they were
+    /// never mutable at the executor level in the first place.
     bool public configurationFrozen;
 
-    event AdapterRegistered(address indexed adapter);
-    event AdapterRemoved(address indexed adapter);
     event OutputTokenAllowed(address indexed token);
     event OutputTokenDisallowed(address indexed token);
     event StrayTokensRecovered(address indexed token, uint256 amount, address indexed to);
@@ -105,22 +137,48 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
     error OutputTokenNotAllowed(address token);
     error PlanExpired();
     error InvalidPlanNonce(uint256 expected, uint256 provided);
-    error AdapterNotAllowed(address adapter);
     error AmbiguousSwapToken(address token);
     error UnexpectedPulledAmount(address token, uint256 expected, uint256 actual);
     error AdapterInvariantViolation(address adapter, uint256 actualOut, uint256 minRequired);
     error NativeTransferFailed();
     error ZeroAddress();
     error ConfigurationIsFrozen();
+    error AdapterHasNoCode(address adapter);
+    error DuplicateAdapterAddress(address adapter);
     error AdapterIsMulticall3();
-    error RegisteredAdapterNotFrozen(address adapter);
+    error AdapterNotYetFrozen(address adapter);
 
-    constructor(address permit2_, address wmon_, address initialOwner_) Ownable(initialOwner_) {
-        if (permit2_ == address(0) || wmon_ == address(0) || initialOwner_ == address(0)) revert ZeroAddress();
+    constructor(
+        address permit2_,
+        address wmon_,
+        address pancakeV2Adapter_,
+        address uniswapV3Adapter_,
+        address initialOwner_
+    ) Ownable(initialOwner_) {
+        if (
+            permit2_ == address(0) || wmon_ == address(0) || pancakeV2Adapter_ == address(0)
+                || uniswapV3Adapter_ == address(0) || initialOwner_ == address(0)
+        ) revert ZeroAddress();
+        if (pancakeV2Adapter_ == MULTICALL3_ADDRESS || uniswapV3Adapter_ == MULTICALL3_ADDRESS) {
+            revert AdapterIsMulticall3();
+        }
+        if (pancakeV2Adapter_ == uniswapV3Adapter_) revert DuplicateAdapterAddress(pancakeV2Adapter_);
+        if (pancakeV2Adapter_.code.length == 0) revert AdapterHasNoCode(pancakeV2Adapter_);
+        if (uniswapV3Adapter_.code.length == 0) revert AdapterHasNoCode(uniswapV3Adapter_);
+
         PERMIT2 = ISignatureTransfer(permit2_);
         WMON = IWMON(wmon_);
+        PANCAKE_V2_ADAPTER = IAdapter(pancakeV2Adapter_);
+        UNISWAP_V3_ADAPTER = IAdapter(uniswapV3Adapter_);
         allowedOutputTokens[MON_NATIVE_SENTINEL] = true;
         emit OutputTokenAllowed(MON_NATIVE_SENTINEL);
+    }
+
+    /// @notice Resolves a swap's closed adapter identifier to its fixed, immutable
+    /// address. There is no other way to reach any adapter address from a plan.
+    function _adapterFor(SweepPlanLib.AdapterKind kind) private view returns (IAdapter) {
+        if (kind == SweepPlanLib.AdapterKind.PANCAKE_V2) return PANCAKE_V2_ADAPTER;
+        return UNISWAP_V3_ADAPTER;
     }
 
     receive() external payable {}
@@ -134,22 +192,6 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
     // Owner administration
     // ---------------------------------------------------------------------
 
-    function registerAdapter(address adapter) external onlyOwner whenNotFrozen {
-        if (adapter == address(0)) revert ZeroAddress();
-        if (adapter == MULTICALL3_ADDRESS) revert AdapterIsMulticall3();
-        allowedAdapters[adapter] = true;
-        if (!_everRegisteredAsAdapter[adapter]) {
-            _everRegisteredAsAdapter[adapter] = true;
-            _registeredAdapterList.push(adapter);
-        }
-        emit AdapterRegistered(adapter);
-    }
-
-    function removeAdapter(address adapter) external onlyOwner whenNotFrozen {
-        allowedAdapters[adapter] = false;
-        emit AdapterRemoved(adapter);
-    }
-
     function registerOutputToken(address token) external onlyOwner whenNotFrozen {
         if (token == address(0)) revert ZeroAddress();
         allowedOutputTokens[token] = true;
@@ -161,24 +203,24 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
         emit OutputTokenDisallowed(token);
     }
 
-    /// @notice Permanently freezes the adapter and output-token registries. Irreversible
-    /// by design - there is no `unfreeze`. Recovery of stray balances remains available
-    /// afterward since it is unrelated to the execution security boundary.
-    /// @dev Requires every currently-allowed adapter to itself already report
-    /// `configurationFrozen() == true` (CA-01/CA-02): a "frozen" SweepExecutor whose
-    /// registered adapters can still have their own routing surface (e.g. intermediate
-    /// asset allowlist) changed by their own owner would not actually establish the
-    /// security boundary the freeze is meant to guarantee. Adapters that were registered
-    /// and later removed (`allowedAdapters[a] == false`) are skipped - they are no
-    /// longer reachable, so their own configuration state is no longer relevant.
+    /// @notice Permanently freezes the output-token registry. Irreversible by design -
+    /// there is no `unfreeze`. Recovery of stray balances remains available afterward
+    /// since it is unrelated to the execution security boundary. Adapter *addresses*
+    /// need no readiness check here - they were fixed, immutable constructor arguments
+    /// from the moment this contract was deployed. Each adapter's own *mutable*
+    /// configuration (its intermediate-asset allowlist) is a separate, owner-controlled
+    /// surface on that adapter contract, though - so this still requires both fixed
+    /// adapters to have already frozen themselves first, otherwise a "frozen" executor
+    /// could keep routing through an adapter whose own routing surface an owner could
+    /// still change. See the contract-level note above for why reading these two
+    /// specific contracts' own flag is not a reintroduction of RA-01's forgeable
+    /// arbitrary-registry pattern.
     function freezeConfiguration() external onlyOwner {
-        uint256 len = _registeredAdapterList.length;
-        for (uint256 i = 0; i < len; i++) {
-            address adapter = _registeredAdapterList[i];
-            if (!allowedAdapters[adapter]) continue;
-            if (!IFreezableAdapter(adapter).configurationFrozen()) {
-                revert RegisteredAdapterNotFrozen(adapter);
-            }
+        if (!IFreezeCheck(address(PANCAKE_V2_ADAPTER)).configurationFrozen()) {
+            revert AdapterNotYetFrozen(address(PANCAKE_V2_ADAPTER));
+        }
+        if (!IFreezeCheck(address(UNISWAP_V3_ADAPTER)).configurationFrozen()) {
+            revert AdapterNotYetFrozen(address(UNISWAP_V3_ADAPTER));
         }
         configurationFrozen = true;
         emit ConfigurationFrozen();
@@ -217,7 +259,6 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
 
         for (uint256 i = 0; i < plan.swaps.length; i++) {
             if (plan.swaps[i].tokenIn == settlementToken) revert AmbiguousSwapToken(settlementToken);
-            if (!allowedAdapters[plan.swaps[i].adapter]) revert AdapterNotAllowed(plan.swaps[i].adapter);
         }
 
         (address[] memory tokens, uint256[] memory amounts) = SweepPlanLib.aggregateTokenAmounts(plan);
@@ -355,19 +396,21 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
         bytes32 executionPlanHash,
         uint256 actionIndex
     ) private returns (bool success) {
-        IERC20(action.tokenIn).forceApprove(action.adapter, action.amountIn);
+        IAdapter adapter = _adapterFor(action.adapterKind);
+        address adapterAddress = address(adapter);
+
+        IERC20(action.tokenIn).forceApprove(adapterAddress, action.amountIn);
         uint256 before = IERC20(settlementToken).balanceOf(address(this));
 
-        try IAdapter(action.adapter)
-            .swap(
-                action.tokenIn, action.amountIn, settlementToken, action.minAmountOut, deadline, action.routeData
-            ) returns (
+        try adapter.swap(
+            action.tokenIn, action.amountIn, settlementToken, action.minAmountOut, deadline, action.routeData
+        ) returns (
             uint256
         ) {
             uint256 actualOut = IERC20(settlementToken).balanceOf(address(this)) - before;
-            IERC20(action.tokenIn).forceApprove(action.adapter, 0);
+            IERC20(action.tokenIn).forceApprove(adapterAddress, 0);
             if (actualOut < action.minAmountOut) {
-                revert AdapterInvariantViolation(action.adapter, actualOut, action.minAmountOut);
+                revert AdapterInvariantViolation(adapterAddress, actualOut, action.minAmountOut);
             }
             emit ActionExecuted(
                 executionPlanHash,
@@ -381,7 +424,7 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
             );
             return true;
         } catch (bytes memory reason) {
-            IERC20(action.tokenIn).forceApprove(action.adapter, 0);
+            IERC20(action.tokenIn).forceApprove(adapterAddress, 0);
             if (!action.allowFailure) {
                 assembly {
                     revert(add(reason, 32), mload(reason))

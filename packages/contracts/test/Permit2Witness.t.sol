@@ -54,7 +54,7 @@ contract Permit2WitnessTest is Test {
         swaps[0] = SweepPlanLib.SwapAction({
             tokenIn: tokenAddr,
             amountIn: 100 ether,
-            adapter: address(0x4444),
+            adapterKind: SweepPlanLib.AdapterKind.PANCAKE_V2,
             minAmountOut: 1,
             routeData: hex"12",
             allowFailure: false
@@ -62,7 +62,7 @@ contract Permit2WitnessTest is Test {
         swaps[1] = SweepPlanLib.SwapAction({
             tokenIn: tokenAddr,
             amountIn: 50 ether,
-            adapter: address(0x4444),
+            adapterKind: SweepPlanLib.AdapterKind.PANCAKE_V2,
             minAmountOut: 1,
             routeData: hex"34",
             allowFailure: false
