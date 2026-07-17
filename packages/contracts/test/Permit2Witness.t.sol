@@ -100,7 +100,7 @@ contract Permit2WitnessTest is Test {
 
     function _buildPermit(SweepPlanLib.SweepPlan memory plan, uint256 permitNonce)
         internal
-        pure
+        view
         returns (ISignatureTransfer.PermitBatchTransferFrom memory permit, bytes32 executionPlanHash)
     {
         (address[] memory tokens, uint256[] memory amounts) = SweepPlanLib.aggregateTokenAmounts(plan);
@@ -110,7 +110,7 @@ contract Permit2WitnessTest is Test {
             permitted[i] = ISignatureTransfer.TokenPermissions({token: tokens[i], amount: amounts[i]});
         }
 
-        executionPlanHash = SweepPlanLib.hashPlan(plan);
+        executionPlanHash = SweepPlanLib.hashPlan(plan, block.chainid, address(this));
         permit = ISignatureTransfer.PermitBatchTransferFrom({
             permitted: permitted,
             nonce: permitNonce,

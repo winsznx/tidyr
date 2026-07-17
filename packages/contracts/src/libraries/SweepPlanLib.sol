@@ -124,9 +124,18 @@ library SweepPlanLib {
     /// Dynamic arrays are hashed element-wise (hash each action, then hash the array of
     /// hashes) rather than relying on a single `abi.encode(plan)` call, so that nested
     /// dynamic `bytes` fields (SwapAction.routeData) cannot introduce encoding ambiguity.
-    function hashPlan(SweepPlan memory plan) internal pure returns (bytes32) {
+    /// @param chainId and @param executor are bound explicitly for defense-in-depth and
+    /// audit clarity. Permit2's own EIP-712 domain separator already includes chainId and
+    /// its own address, and Permit2 already binds the spender to `msg.sender` at signing
+    /// time (proven by Permit2Witness.t.sol's wrong-spender test) - so cross-chain and
+    /// cross-executor replay are already structurally impossible without this. Including
+    /// them here makes that property explicit in the plan's own hash rather than relying
+    /// solely on an implicit property of the upstream Permit2 integration.
+    function hashPlan(SweepPlan memory plan, uint256 chainId, address executor) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
+                chainId,
+                executor,
                 plan.owner,
                 plan.recipient,
                 plan.outputToken,

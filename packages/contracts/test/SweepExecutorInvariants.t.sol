@@ -96,7 +96,7 @@ contract SweepExecutorHandler is Test {
             tokenPermissionHashes[i] = keccak256(abi.encode(TOKEN_PERMISSIONS_TYPEHASH, tokens[i], amounts[i]));
         }
 
-        bytes32 executionPlanHash = SweepPlanLib.hashPlan(plan);
+        bytes32 executionPlanHash = SweepPlanLib.hashPlan(plan, block.chainid, address(EXECUTOR));
         bytes32 witness = TidyrWitness.hashWitness(executionPlanHash);
         bytes32 typeHash = keccak256(abi.encodePacked(PERMIT_BATCH_WITNESS_STUB, TidyrWitness.WITNESS_TYPE_STRING));
 

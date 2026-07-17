@@ -13,11 +13,13 @@ contract SweepPlanLibTest is Test {
     address constant OUTPUT_TOKEN = 0x754704Bc059F8C67012fEd69BC8A327a5aafb603; // USDC (Monad)
     address constant TOKEN_IN = 0x3333333333333333333333333333333333333333;
     address constant ADAPTER = 0x4444444444444444444444444444444444444444;
+    uint256 constant TEST_CHAIN_ID = 143; // Monad mainnet
+    address constant TEST_EXECUTOR = 0x9999999999999999999999999999999999999999;
 
     /// @dev Golden vector A: one swap, one transfer, no discards/burns.
     /// Independently reproduced in packages/transaction-review/src/executionPlanHash.test.ts
     bytes32 constant VECTOR_A_EXPECTED_HASH =
-        0x184bb27ccf4286fdd2f69be2433e59715e5ce345badd2ba2f5688bd2368f1de5;
+        0xdf7a8dd0108003ffa8b036d6471d7a6479a56d02b6b7737737c398e3515100d1;
 
     function _vectorA() internal pure returns (SweepPlanLib.SweepPlan memory plan) {
         SweepPlanLib.SwapAction[] memory swaps = new SweepPlanLib.SwapAction[](1);
@@ -48,15 +50,15 @@ contract SweepPlanLibTest is Test {
     }
 
     function test_vectorA_hashIsDeterministic() public pure {
-        bytes32 h1 = SweepPlanLib.hashPlan(_vectorA());
-        bytes32 h2 = SweepPlanLib.hashPlan(_vectorA());
+        bytes32 h1 = SweepPlanLib.hashPlan(_vectorA(), TEST_CHAIN_ID, TEST_EXECUTOR);
+        bytes32 h2 = SweepPlanLib.hashPlan(_vectorA(), TEST_CHAIN_ID, TEST_EXECUTOR);
         assertEq(h1, h2);
     }
 
     /// @dev Prints the hash so it can be cross-checked against the TypeScript
     /// implementation's output for the identical vector (see test-vectors/golden-vectors.md).
     function test_vectorA_printHash() public pure {
-        bytes32 h = SweepPlanLib.hashPlan(_vectorA());
+        bytes32 h = SweepPlanLib.hashPlan(_vectorA(), TEST_CHAIN_ID, TEST_EXECUTOR);
         // forge test -vvvv will show this in the trace; also asserted below.
         assertEq(h, VECTOR_A_EXPECTED_HASH, "vector A hash must match recorded golden value");
     }
@@ -65,35 +67,35 @@ contract SweepPlanLibTest is Test {
         SweepPlanLib.SweepPlan memory a = _vectorA();
         SweepPlanLib.SweepPlan memory b = _vectorA();
         b.swaps[0].amountIn = 201 ether;
-        assertTrue(SweepPlanLib.hashPlan(a) != SweepPlanLib.hashPlan(b));
+        assertTrue(SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR) != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR));
     }
 
     function test_recipientChangesHash() public pure {
         SweepPlanLib.SweepPlan memory a = _vectorA();
         SweepPlanLib.SweepPlan memory b = _vectorA();
         b.recipient = 0x5555555555555555555555555555555555555555;
-        assertTrue(SweepPlanLib.hashPlan(a) != SweepPlanLib.hashPlan(b));
+        assertTrue(SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR) != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR));
     }
 
     function test_outputTokenChangesHash() public pure {
         SweepPlanLib.SweepPlan memory a = _vectorA();
         SweepPlanLib.SweepPlan memory b = _vectorA();
         b.outputToken = 0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A; // WMON instead of USDC
-        assertTrue(SweepPlanLib.hashPlan(a) != SweepPlanLib.hashPlan(b));
+        assertTrue(SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR) != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR));
     }
 
     function test_deadlineChangesHash() public pure {
         SweepPlanLib.SweepPlan memory a = _vectorA();
         SweepPlanLib.SweepPlan memory b = _vectorA();
         b.deadline = a.deadline + 1;
-        assertTrue(SweepPlanLib.hashPlan(a) != SweepPlanLib.hashPlan(b));
+        assertTrue(SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR) != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR));
     }
 
     function test_nonceChangesHash() public pure {
         SweepPlanLib.SweepPlan memory a = _vectorA();
         SweepPlanLib.SweepPlan memory b = _vectorA();
         b.nonce = a.nonce + 1;
-        assertTrue(SweepPlanLib.hashPlan(a) != SweepPlanLib.hashPlan(b));
+        assertTrue(SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR) != SweepPlanLib.hashPlan(b, TEST_CHAIN_ID, TEST_EXECUTOR));
     }
 
     /// @dev Swapping the order of two swap actions must change the hash — proves the
@@ -112,13 +114,13 @@ contract SweepPlanLibTest is Test {
             allowFailure: true
         });
         a.swaps = swaps;
-        bytes32 forwardHash = SweepPlanLib.hashPlan(a);
+        bytes32 forwardHash = SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR);
 
         SweepPlanLib.SwapAction[] memory reversed = new SweepPlanLib.SwapAction[](2);
         reversed[0] = swaps[1];
         reversed[1] = swaps[0];
         a.swaps = reversed;
-        bytes32 reversedHash = SweepPlanLib.hashPlan(a);
+        bytes32 reversedHash = SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR);
 
         assertTrue(forwardHash != reversedHash);
     }
@@ -127,7 +129,7 @@ contract SweepPlanLibTest is Test {
     /// two hashes must never be the same value for the same logical plan (§19.3).
     function test_executionHashDiffersFromDisplayManifestHash() public pure {
         SweepPlanLib.SweepPlan memory a = _vectorA();
-        bytes32 executionHash = SweepPlanLib.hashPlan(a);
+        bytes32 executionHash = SweepPlanLib.hashPlan(a, TEST_CHAIN_ID, TEST_EXECUTOR);
         assertTrue(executionHash != a.displayManifestHash);
     }
 

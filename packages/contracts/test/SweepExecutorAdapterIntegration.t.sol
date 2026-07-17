@@ -84,7 +84,7 @@ contract SweepExecutorAdapterIntegrationTest is Test {
         for (uint256 i = 0; i < tokens.length; i++) {
             tokenPermissionHashes[i] = keccak256(abi.encode(TOKEN_PERMISSIONS_TYPEHASH, tokens[i], amounts[i]));
         }
-        bytes32 executionPlanHash = SweepPlanLib.hashPlan(plan);
+        bytes32 executionPlanHash = SweepPlanLib.hashPlan(plan, block.chainid, address(executor));
         bytes32 witness = TidyrWitness.hashWitness(executionPlanHash);
         bytes32 typeHash = keccak256(abi.encodePacked(PERMIT_BATCH_WITNESS_STUB, TidyrWitness.WITNESS_TYPE_STRING));
         bytes32 structHash = keccak256(

@@ -11,12 +11,28 @@ record of what was cross-verified and when. The actual assertions live in:
 - `packages/contracts/test/SweepPlanLib.t.sol` (`VECTOR_A_EXPECTED_HASH`)
 - `packages/transaction-review/src/executionPlanHash.test.ts` (`VECTOR_A_EXPECTED_HASH`)
 
+## Revision history
+
+- **2026-07-17 (security addendum, pre-Phase-7 review):** `hashPlan` gained two new
+  leading parameters, `chainId` and `executor`, bound explicitly for defense-in-depth
+  and audit clarity — see `docs/security-addendum-review.md`. Permit2's own EIP-712
+  domain separator already includes chainId and its own address, and Permit2 already
+  binds the spender to `msg.sender` at signing time, so cross-chain and cross-executor
+  replay were already structurally impossible without this change; it makes that
+  property explicit in the plan's own hash rather than relying solely on an implicit
+  property of the upstream Permit2 integration. Vector A's expected hash changed as a
+  result (recorded below); no other field or golden-vector semantics changed.
+
 ## Vector A
 
-One swap action, one transfer action, no discards, no burns.
+One swap action, one transfer action, no discards, no burns. Signed for chain ID `143`
+(Monad mainnet) and a fixed test executor address
+`0x9999999999999999999999999999999999999999`.
 
 | Field                   | Value                                                     |
 | ----------------------- | --------------------------------------------------------- |
+| `chainId`               | `143`                                                     |
+| `executor`              | `0x9999999999999999999999999999999999999999`              |
 | `owner`                 | `0x1111111111111111111111111111111111111111`              |
 | `recipient`             | `0x2222222222222222222222222222222222222222`              |
 | `outputToken`           | `0x754704Bc059F8C67012fEd69BC8A327a5aafb603` (Monad USDC) |
@@ -34,7 +50,7 @@ One swap action, one transfer action, no discards, no burns.
 | `transfers[0].to`       | `0x2222222222222222222222222222222222222222`              |
 
 **Expected `executionPlanHash`:**
-`0x184bb27ccf4286fdd2f69be2433e59715e5ce345badd2ba2f5688bd2368f1de5`
+`0xdf7a8dd0108003ffa8b036d6471d7a6479a56d02b6b7737737c398e3515100d1`
 
 Derivation: computed by running `forge test -vvv` against
 `SweepPlanLibTest::test_vectorA_printHash` (the Solidity implementation), then
@@ -53,6 +69,8 @@ assumed/fabricated constant.
 | `deadline` +1                                                           | yes              |
 | `nonce` +1                                                              | yes              |
 | Swap action order reversed (2-swap variant)                             | yes              |
+| `chainId` changed                                                       | yes              |
+| `executor` address changed                                              | yes              |
 | Compare `executionPlanHash` vs. `displayManifestHash` for the same plan | always different |
 
 ## Why two independent hashes (PRD §19.3)
