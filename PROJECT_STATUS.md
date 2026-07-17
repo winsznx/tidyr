@@ -194,7 +194,76 @@ pnpm format                                     -> clean
 
 **Unresolved risks:** none new.
 
-**Commit hash:** recorded after this phase's commit (see `git log`).
+**Commit hash:** `218fb3b`
 
 **Next phase:** Phase 3 — Permit2 witness binding to `executionPlanHash` (SignatureTransfer,
 exact per-token amount aggregation, replay/expiry/wrong-spender rejection tests).
+
+---
+
+## Phase 3 — Permit2 Authorization
+
+**Objective:** Bind Permit2 `SignatureTransfer` authorization to `executionPlanHash` via
+a witness, so a signature for one plan can never authorize a different plan, and prove
+it against Permit2's real vendored deployment — not a mock.
+
+**Files created:**
+
+- `packages/contracts/src/libraries/TidyrWitness.sol` — the `TidyrWitness(bytes32
+executionPlanHash)` witness struct's typehash and the exact `witnessTypeString`
+  Permit2's `permitWitnessTransferFrom` requires, both derived from Permit2's own
+  vendored source and test-suite convention, not invented (see
+  `docs/research/external-addresses.md`)
+- `SweepPlanLib.aggregateTokenAmounts` (added to the existing library) — sums the exact
+  required amount per unique token across every action that consumes user funds
+  (swaps/transfers/discards/burns), so Permit2 is only ever asked to authorize exactly
+  what the plan needs, with duplicate token references safely combined into one entry
+- `packages/contracts/test/mocks/MockERC20.sol` — minimal test-only mintable ERC20
+- `packages/contracts/src/vendor/Permit2Marker.sol` — forces `forge build` to produce a
+  Permit2 artifact for `deployCode`, without any 0.8.26 TIDYR source directly importing
+  the concrete Permit2 contract
+- `packages/contracts/test/Permit2Witness.t.sol` — 7 tests against a real, unmodified
+  Permit2 deployment (via `deployCode("Permit2.sol:Permit2")`): token aggregation
+  dedup/sum, valid signed transfer succeeds, tampered witness fails, reused nonce fails,
+  expired deadline fails, wrong spender (a different calling contract) fails, excessive
+  pull fails
+
+**Requirements satisfied:** all Phase 3 acceptance criteria — valid witness succeeds;
+modified plan fails; reused nonce fails; expired signature fails; wrong spender fails;
+excessive pull fails; duplicate token requirements are safely aggregated. EIP-1271
+contract-signature support and the "existing direct approval to Permit2" onboarding flow
+are explicitly deferred to Phase 14 (execution scheduler) — not part of this phase's
+scope and not silently assumed.
+
+**Two real build problems found and fixed while wiring this phase (not scope creep —
+both blocked any use of the real Permit2 contract at all):**
+
+1. Permit2's own nested `lib/solmate` submodule wasn't initialized (only the top-level
+   `permit2` submodule was added in Phase 1) — fixed with `git submodule update --init
+--recursive` inside the permit2 submodule; confirmed our top-level CI's
+   `submodules: recursive` checkout step already handles this correctly on a fresh clone.
+2. `foundry.toml`'s hard-pinned `solc = "0.8.26"` made it impossible to compile Permit2
+   at all (its contracts pragma an exact `0.8.17`, which cannot satisfy `^0.8.26` in the
+   same compilation unit). Fixed by switching to `auto_detect_solc = true` (TIDYR's own
+   contracts now pragma an exact `0.8.26` for determinism, Permit2 compiles under its own
+   `0.8.17` unit) and enabling `via_ir = true` project-wide, since Permit2's contracts hit
+   "stack too deep" under legacy codegen (confirmed Permit2's own `foundry.toml` also
+   requires `via_ir = true`). Re-verified after both fixes that Vector A's
+   `executionPlanHash` golden value is unchanged.
+
+**Commands executed and results:**
+
+```
+forge clean && forge build   -> Compiling 15 files with Solc 0.8.17 / 42 files with Solc 0.8.26, successful
+forge test                   -> 20 passed, 0 failed (1 toolchain smoke + 12 SweepPlanLib + 7 Permit2Witness)
+```
+
+**Unresolved risks:** none new. EIP-1271 smart-contract-wallet signature support remains
+an explicitly deferred item, not a silent gap — Permit2 itself supports it
+(`SignatureVerification.sol`) and TIDYR will exercise it if/when smart-contract wallet
+support is added to the execution scheduler.
+
+**Commit hash:** recorded after this phase's commit (see `git log`).
+
+**Next phase:** Phase 4 — SweepExecutor core (validation, Permit2 pull, allowlisted
+adapter execution, balance-delta isolation, remainder return, events).

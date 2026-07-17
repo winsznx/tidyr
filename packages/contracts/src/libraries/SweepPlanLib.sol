@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+pragma solidity 0.8.26;
 
 /// @notice Action and plan structs plus deterministic hashing for TIDYR sweep plans.
 /// @dev Reflects PRD Section 19 Mandatory Implementation Addendum: no executor-side
@@ -62,6 +62,61 @@ library SweepPlanLib {
         uint256 total = totalActions(plan);
         if (total == 0) revert EmptyPlan();
         if (total > MAX_ACTIONS) revert TooManyActions(total, MAX_ACTIONS);
+    }
+
+    /// @notice Sums the exact amount required per unique token across every action that
+    /// consumes user-owned tokens (swaps.tokenIn, transfers.token, discards.token,
+    /// burns.token). Used to build the exact Permit2 `TokenPermissions[]` the plan
+    /// needs — never a duplicate entry per token, never more than the plan requires.
+    /// @dev O(n^2) in total action count, bounded by MAX_ACTIONS (50), so worst case is
+    /// a fixed, small, audited cost — not user-influenced beyond that bound.
+    function aggregateTokenAmounts(SweepPlan memory plan)
+        internal
+        pure
+        returns (address[] memory tokens, uint256[] memory amounts)
+    {
+        uint256 total = totalActions(plan);
+        address[] memory seen = new address[](total);
+        uint256[] memory sums = new uint256[](total);
+        uint256 uniqueCount = 0;
+
+        for (uint256 i = 0; i < plan.swaps.length; i++) {
+            uniqueCount = _accumulate(seen, sums, uniqueCount, plan.swaps[i].tokenIn, plan.swaps[i].amountIn);
+        }
+        for (uint256 i = 0; i < plan.transfers.length; i++) {
+            uniqueCount = _accumulate(seen, sums, uniqueCount, plan.transfers[i].token, plan.transfers[i].amount);
+        }
+        for (uint256 i = 0; i < plan.discards.length; i++) {
+            uniqueCount = _accumulate(seen, sums, uniqueCount, plan.discards[i].token, plan.discards[i].amount);
+        }
+        for (uint256 i = 0; i < plan.burns.length; i++) {
+            uniqueCount = _accumulate(seen, sums, uniqueCount, plan.burns[i].token, plan.burns[i].amount);
+        }
+
+        tokens = new address[](uniqueCount);
+        amounts = new uint256[](uniqueCount);
+        for (uint256 i = 0; i < uniqueCount; i++) {
+            tokens[i] = seen[i];
+            amounts[i] = sums[i];
+        }
+    }
+
+    function _accumulate(
+        address[] memory seen,
+        uint256[] memory sums,
+        uint256 uniqueCount,
+        address token,
+        uint256 amount
+    ) private pure returns (uint256) {
+        for (uint256 i = 0; i < uniqueCount; i++) {
+            if (seen[i] == token) {
+                sums[i] += amount;
+                return uniqueCount;
+            }
+        }
+        seen[uniqueCount] = token;
+        sums[uniqueCount] = amount;
+        return uniqueCount + 1;
     }
 
     /// @notice Deterministic hash of the on-chain-executed plan fields. Distinct from

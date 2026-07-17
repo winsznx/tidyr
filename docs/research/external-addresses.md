@@ -48,6 +48,42 @@ curl -s -X POST https://rpc.monad.xyz -H 'Content-Type: application/json' \
 # non-empty "0x..." result required; "0x" means no contract
 ```
 
+## Permit2 witness type string derivation
+
+The PRD (§19 addendum, Phase 3 instructions) explicitly forbids inventing the Permit2
+witness type string. It was derived directly from Permit2's own vendored source
+(`packages/contracts/lib/permit2/src/libraries/PermitHash.sol`,
+`_PERMIT_BATCH_WITNESS_TRANSFER_FROM_TYPEHASH_STUB`) and cross-checked against Permit2's
+own test suite convention
+(`packages/contracts/lib/permit2/test/SignatureTransfer.t.sol::WITNESS_TYPE_STRING`,
+which demonstrates the exact pattern `"<Name> witness)<Name>(<fields>)TokenPermissions(address token,uint256 amount)"`
+for a custom witness struct). TIDYR's witness struct is
+`TidyrWitness(bytes32 executionPlanHash)`; the resulting `witnessTypeString` is:
+
+```
+TidyrWitness witness)TidyrWitness(bytes32 executionPlanHash)TokenPermissions(address token,uint256 amount)
+```
+
+This was verified end-to-end against a real, unmodified Permit2 deployment (not a mock)
+in `packages/contracts/test/Permit2Witness.t.sol` — 7 passing tests including a
+successful signed transfer, a tampered-witness rejection, replay/expiry/wrong-spender/
+excessive-pull rejections, and token-amount aggregation. See
+`packages/contracts/src/libraries/TidyrWitness.sol`.
+
+### Toolchain finding: Permit2 requires its own solc/via_ir settings
+
+Permit2's own contracts pragma an exact `solidity 0.8.17` and only compile without
+"stack too deep" under `via_ir = true` (confirmed by Permit2's own `foundry.toml`).
+TIDYR's own contracts target `0.8.26`. Rather than downgrading TIDYR to 0.8.17 or
+forking Permit2, `packages/contracts/foundry.toml` uses `auto_detect_solc = true` (so
+forge compiles each file under a version matching its own pragma) plus a
+`src/vendor/Permit2Marker.sol` file (pragma `=0.8.17`) whose only job is to force forge
+to compile Permit2's artifact so `deployCode("Permit2.sol:Permit2")` can load it in
+tests — no TIDYR 0.8.26 source ever directly imports the concrete `Permit2.sol`
+contract; only its version-agnostic `ISignatureTransfer` interface (`pragma ^0.8.0`) is
+imported where needed, which resolved a real "Found incompatible versions" build failure
+encountered while wiring this up.
+
 ## Critical finding: no classic PancakeSwap V2 Router on Monad
 
 The PRD's `PancakeV2Adapter` design (Section 4) assumes a classic `PancakeRouter`

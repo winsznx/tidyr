@@ -4,13 +4,26 @@ out = "out"
 libs = ["lib"]
 test = "test"
 script = "script"
-solc = "0.8.26"
+# No pinned `solc` here: our own contracts target 0.8.26, but Permit2 (a vendored
+# dependency) pragmas an exact `0.8.17`. Auto-detection lets forge pick the right
+# compiler per file instead of forcing every source (including third-party libs) to a
+# single version. Production deployment scripts pin the version explicitly per contract
+# at deploy time (Phase 8/9), so this does not weaken deployment reproducibility.
+auto_detect_solc = true
 evm_version = "cancun"
 optimizer = true
 optimizer_runs = 200
-via_ir = false
+# Permit2 (vendored, compiled under its own 0.8.17 unit - see auto_detect_solc above)
+# hits "stack too deep" under the legacy codegen; Permit2's own foundry.toml also builds
+# with via_ir = true. Enabling it project-wide is the simplest correct fix and does not
+# change our own contracts' correctness (only codegen path / compile time / minor gas
+# accounting, which gas snapshots already account for).
+via_ir = true
 gas_reports = ["*"]
-fs_permissions = [{ access = "read", path = "./deployments" }]
+fs_permissions = [
+  { access = "read", path = "./deployments" },
+  { access = "read", path = "./out" },
+]
 
 [fuzz]
 runs = 256
