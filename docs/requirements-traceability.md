@@ -1,6 +1,6 @@
 # TIDYR Requirements Traceability Matrix
 
-Status: through Phase 5. `Status` values: `not-started`, `implemented`, `blocked`. This
+Status: through Phase 6. `Status` values: `not-started`, `implemented`, `blocked`. This
 matrix is updated at the end of every phase per the operating protocol.
 
 Legend for **Component**: `SC` = smart contracts, `RT` = routing, `TR` = transaction-review,
@@ -9,24 +9,24 @@ Legend for **Component**: `SC` = smart contracts, `RT` = routing, `TR` = transac
 
 ## Section 2 — Mainnet deployment inventory
 
-| Req                                         | Component | Status      | Test plan                                | Evidence                             | Dependency            |
-| ------------------------------------------- | --------- | ----------- | ---------------------------------------- | ------------------------------------ | --------------------- |
-| SweepExecutor deployed, verified, immutable | SC, INFRA | not-started | Foundry deploy script + MonadScan verify | `deployments/mainnet.json` (Phase 9) | Phase 7 security gate |
-| PancakeV2Adapter deployed                   | SC, INFRA | not-started | fork test + mainnet deploy               | same                                 | Phase 4/5             |
-| UniswapV3Adapter deployed                   | SC, INFRA | not-started | fork test + mainnet deploy               | same                                 | Phase 4/5             |
-| 5 DemoTokens deployed                       | SC, INFRA | not-started | unit test + mainnet deploy               | same                                 | Phase 6               |
-| DemoDistributor deployed                    | SC, INFRA | not-started | unit test + mainnet deploy               | same                                 | Phase 6               |
-| All contracts source-verified               | INFRA     | not-started | MonadScan verify command exit 0          | `deployments/mainnet.json`           | Phase 9               |
+| Req                                         | Component | Status                  | Test plan                                | Evidence                                                                                                                           | Dependency            |
+| ------------------------------------------- | --------- | ----------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| SweepExecutor deployed, verified, immutable | SC, INFRA | not-started             | Foundry deploy script + MonadScan verify | `deployments/mainnet.json` (Phase 9)                                                                                               | Phase 7 security gate |
+| PancakeV2Adapter deployed                   | SC, INFRA | not-started             | fork test + mainnet deploy               | same                                                                                                                               | Phase 4/5             |
+| UniswapV3Adapter deployed                   | SC, INFRA | not-started             | fork test + mainnet deploy               | same                                                                                                                               | Phase 4/5             |
+| 5 DemoTokens deployed                       | SC, INFRA | implemented (contracts) | unit test + mainnet deploy               | `packages/contracts/src/tokens/{DemoToken,BurnableDemoToken}.sol`, `test/DemoToken.t.sol` (6 tests); mainnet deployment is Phase 9 | Phase 6               |
+| DemoDistributor deployed                    | SC, INFRA | implemented (contract)  | unit test + mainnet deploy               | `packages/contracts/src/tokens/DemoDistributor.sol`, `test/DemoDistributor.t.sol` (8 tests); mainnet deployment is Phase 9         | Phase 6               |
+| All contracts source-verified               | INFRA     | not-started             | MonadScan verify command exit 0          | `deployments/mainnet.json`                                                                                                         | Phase 9               |
 
 ## Section 3 — Demo token strategy
 
-| Req                                                     | Component | Status      | Test plan                              | Evidence             | Dependency                                     |
-| ------------------------------------------------------- | --------- | ----------- | -------------------------------------- | -------------------- | ---------------------------------------------- |
-| DUST1–3 standard ERC-20                                 | SC        | not-started | unit test                              | Phase 6 artifacts    | none                                           |
-| DUST4 ERC-20 + burn(uint256)                            | SC        | not-started | unit test: burn reduces balance+supply | Phase 6 artifacts    | none                                           |
-| DUST5 no pool, honestly non-tradable                    | SC, RT    | not-started | integration: quote returns no-route    | Phase 10 smoke test  | Phase 10                                       |
-| $ liquidity dynamically sized (not fixed $1 assumption) | INFRA     | not-started | preflight script prints live MON value | Phase 8/10 artifacts | PRD §19.12 override applied — see conflict C-2 |
-| DemoDistributor one claim per address, fixed amount     | SC        | not-started | unit test: 2nd claim reverts           | Phase 6 artifacts    | none                                           |
+| Req                                                     | Component | Status                 | Test plan                                                                                                                                                                                                                          | Evidence                                                                           | Dependency                                     |
+| ------------------------------------------------------- | --------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------- |
+| DUST1–3 standard ERC-20                                 | SC        | implemented            | unit test: fixed supply minted to deployer, no `mint` function exists                                                                                                                                                              | `packages/contracts/test/DemoToken.t.sol`                                          | none                                           |
+| DUST4 ERC-20 + burn(uint256)                            | SC        | implemented            | unit test: burn reduces balance+supply; over-balance burn reverts                                                                                                                                                                  | `packages/contracts/test/DemoToken.t.sol`                                          | none                                           |
+| DUST5 no pool, honestly non-tradable                    | SC, RT    | implemented (contract) | contract is identical in shape to DUST1-3 (freely transferable); "no pool" is a liquidity-provisioning decision, not a contract restriction; quote-returns-no-route integration test is Phase 10 (needs real deployment + routing) | `packages/contracts/test/DemoToken.t.sol::test_standardToken_isFreelyTransferable` | Phase 10                                       |
+| $ liquidity dynamically sized (not fixed $1 assumption) | INFRA     | not-started            | preflight script prints live MON value                                                                                                                                                                                             | Phase 8/10 artifacts                                                               | PRD §19.12 override applied — see conflict C-2 |
+| DemoDistributor one claim per address, fixed amount     | SC        | implemented            | unit test: 2nd claim reverts; fresh wallet can claim; insufficient inventory reverts the whole claim (no partial distribution); pause blocks claims, unpause restores; onlyOwner pause                                             | `packages/contracts/test/DemoDistributor.t.sol` (8 tests)                          | none                                           |
 
 ## Section 4/5/19.9/19.10/19.11/19.15 — SweepExecutor + adapters + security patterns
 

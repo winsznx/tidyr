@@ -420,6 +420,65 @@ flakiness never blocks the required (deterministic) suite.
 (Phase 6/10 will deploy TIDYR's own demo liquidity, at which point a V3 fork test could
 be added if a real V3 pool with TIDYR-relevant tokens exists — not assumed here).
 
-**Commit hash:** recorded after this phase's commit (see `git log`).
+**Commit hash:** `1935fbf`
 
 **Next phase:** Phase 6 — Demo token suite (DUST1–5) and DemoDistributor.
+
+---
+
+## Phase 6 — Demo Asset Suite
+
+**Objective:** Implement the five demo tokens and `DemoDistributor` with a fixed,
+documented supply, no hidden taxes, no post-deployment minting, and one honest claim
+per address.
+
+**Files created:**
+
+- `packages/contracts/src/tokens/DemoToken.sol` — fixed 1,000,000-token supply minted
+  to the deployer at construction; no `mint` function exists at all, so supply can never
+  change afterward. Used for DUST1/DUST2/DUST3/DUST5 (DUST5's "no pool" status is a
+  liquidity-provisioning decision made in Phase 8/10, not a contract-level difference —
+  the token itself is identical in shape to DUST1–3)
+- `packages/contracts/src/tokens/BurnableDemoToken.sol` — same fixed-supply policy, adds
+  OpenZeppelin's audited `ERC20Burnable` for DUST4
+- `packages/contracts/src/tokens/DemoDistributor.sol` — `Ownable2Step` + `Pausable`;
+  `claimDemoBundle()` sets `claimed[msg.sender]` before any external call (CEI), then
+  transfers 200 of each of the five tokens via `SafeERC20`; `pause`/`unpause` exist only
+  for emergency inventory depletion or a token-level error per §19.15, restricted to the
+  owner; deliberately has no owner withdrawal function since it only ever holds
+  pre-funded demo inventory, never arbitrary user funds
+- `packages/contracts/test/DemoToken.t.sol` (6 tests), `test/DemoDistributor.t.sol`
+  (8 tests)
+
+**Requirements satisfied:** all Phase 6 acceptance criteria — one successful claim;
+second claim reverts; DUST4 burn reduces both balance and total supply (and reverts on
+an over-balance burn); DUST5 remains freely transferable at the contract level;
+inventory-limit handling is honest (a claim that would exceed remaining inventory
+reverts the entire bundle transfer, never a partial/short distribution — verified by
+draining the distributor via 5 real claims, exactly matching its 1000-ether-per-token
+funding, then confirming a 6th claimant's transaction reverts and is not recorded as
+claimed).
+
+**A real test bug found and fixed (not a contract bug):** the initial over-balance-burn
+test computed `token.balanceOf(address(this)) + 1` directly inside the `vm.expectRevert()`
+call-armed statement. Since `balanceOf` is itself an external call, Foundry's
+`expectRevert` intercepted _that_ call (a harmless view call that obviously doesn't
+revert) rather than the intended `burn` call, so the test passed for the wrong reason
+until closer inspection of its trace. Fixed by computing the balance on its own line
+before arming `expectRevert`.
+
+**Commands executed and results:**
+
+```
+forge build                                                          -> successful
+forge test --no-match-path "*.fork.t.sol" --no-match-contract SweepExecutorInvariantsTest
+                                                                      -> 79 passed, 0 failed
+```
+
+**Unresolved risks:** none new. Mainnet deployment of these contracts (real supply,
+real distributor funding) is Phase 9 — nothing here is deployed yet.
+
+**Commit hash:** recorded after this phase's commit (see `git log`).
+
+**Next phase:** Phase 7 — Security hardening: fuzz/invariant/fork test expansion,
+Slither, gas snapshot review, threat-model documentation.
