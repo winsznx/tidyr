@@ -27,15 +27,15 @@ Together these implement all eight checks
 
 All of these must be set (see `.env.example`) before running either script:
 
-| Variable                   | Purpose                                                                                                             |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `MONAD_RPC_URL`            | RPC endpoint (defaults to `https://rpc.monad.xyz` if unset)                                                         |
-| `PERMIT2_ADDRESS`          | canonical Permit2                                                                                                   |
-| `WMON_ADDRESS`             | canonical WMON                                                                                                      |
-| `PANCAKE_V2_FACTORY`       | canonical PancakeSwap V2 factory                                                                                    |
-| `UNISWAP_V3_SWAP_ROUTER02` | canonical Uniswap SwapRouter02                                                                                      |
-| `PROTOCOL_OWNER_ADDRESS`   | the address ownership will be transferred toward (public address only)                                              |
-| `DEPLOYER_PRIVATE_KEY`     | **never** set this in a chat message or a runtime service — place it in a local, gitignored `.env.deploy` file only |
+| Variable                   | Purpose                                                                                                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MONAD_RPC_URL`            | RPC endpoint (defaults to `https://rpc.monad.xyz` if unset)                                                                                                                                             |
+| `PERMIT2_ADDRESS`          | canonical Permit2                                                                                                                                                                                       |
+| `WMON_ADDRESS`             | canonical WMON                                                                                                                                                                                          |
+| `PANCAKE_V2_FACTORY`       | canonical PancakeSwap V2 factory                                                                                                                                                                        |
+| `UNISWAP_V3_SWAP_ROUTER02` | canonical Uniswap SwapRouter02                                                                                                                                                                          |
+| `PROTOCOL_OWNER_ADDRESS`   | optional — the address ownership will be transferred toward. If unset, defaults to the deployer's own address (derived from `DEPLOYER_PRIVATE_KEY`), in which case no ownership transfer happens at all |
+| `DEPLOYER_PRIVATE_KEY`     | **never** set this in a chat message or a runtime service — place it in a local, gitignored `.env.deploy` file only                                                                                     |
 
 ## Phase 8 mode: preflight/dry-run (no broadcast)
 

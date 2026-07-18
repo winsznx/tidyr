@@ -54,9 +54,13 @@ contract Deploy is Script {
         address wmon = vm.envAddress("WMON_ADDRESS");
         address pancakeFactory = vm.envAddress("PANCAKE_V2_FACTORY");
         address uniswapRouter02 = vm.envAddress("UNISWAP_V3_SWAP_ROUTER02");
-        address protocolOwner = vm.envAddress("PROTOCOL_OWNER_ADDRESS");
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
+        // Defaults to the deployer's own address if unset - ownership then simply
+        // stays with the deployer (the `protocolOwner != deployer` guard below skips
+        // the transferOwnership calls entirely), so leaving this unset is safe, not
+        // an accidental zero-address transfer.
+        address protocolOwner = vm.envOr("PROTOCOL_OWNER_ADDRESS", deployer);
 
         _preflight(permit2, wmon, pancakeFactory, uniswapRouter02, protocolOwner, deployer);
 
