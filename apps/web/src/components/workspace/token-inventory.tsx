@@ -7,11 +7,20 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { useTokenInventory } from "@/lib/tokens/use-token-inventory";
 import type { WalletRecord } from "@/store/wallets";
 import { TokenRow } from "./token-row";
 
-function WalletTokenTable({ wallet, search }: { wallet: WalletRecord; search: string }) {
+function WalletTokenTable({
+  wallet,
+  search,
+  hideNoRouteCandidate,
+}: {
+  wallet: WalletRecord;
+  search: string;
+  hideNoRouteCandidate: boolean;
+}) {
   const { data, isLoading, isError } = useTokenInventory(wallet.address as Address);
 
   const filtered = (data?.rows ?? []).filter((row) => {
@@ -74,7 +83,12 @@ function WalletTokenTable({ wallet, search }: { wallet: WalletRecord; search: st
         </thead>
         <tbody>
           {filtered.map((row) => (
-            <TokenRow key={row.address} wallet={wallet.address as Address} token={row} />
+            <TokenRow
+              key={row.address}
+              wallet={wallet.address as Address}
+              token={row}
+              hideNoRouteCandidate={hideNoRouteCandidate}
+            />
           ))}
         </tbody>
       </table>
@@ -84,6 +98,7 @@ function WalletTokenTable({ wallet, search }: { wallet: WalletRecord; search: st
 
 export function TokenInventory({ wallets }: { wallets: WalletRecord[] }) {
   const [search, setSearch] = useState("");
+  const [hideNoRouteCandidate, setHideNoRouteCandidate] = useState(false);
 
   if (wallets.length === 0) {
     return (
@@ -96,15 +111,30 @@ export function TokenInventory({ wallets }: { wallets: WalletRecord[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <Input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search by symbol, name, or address"
-        aria-label="Search tokens"
-        className="max-w-sm"
-      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by symbol, name, or address"
+          aria-label="Search tokens"
+          className="max-w-sm"
+        />
+        <label className="flex items-center gap-2 text-sm text-(--color-body)">
+          <Switch
+            checked={hideNoRouteCandidate}
+            onChange={setHideNoRouteCandidate}
+            label="Hide tokens with no route candidate or burn capability"
+          />
+          Hide tokens with no action available
+        </label>
+      </div>
       {wallets.map((wallet) => (
-        <WalletTokenTable key={wallet.address} wallet={wallet} search={search} />
+        <WalletTokenTable
+          key={wallet.address}
+          wallet={wallet}
+          search={search}
+          hideNoRouteCandidate={hideNoRouteCandidate}
+        />
       ))}
     </div>
   );

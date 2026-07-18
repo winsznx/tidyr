@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
+import { IconClose } from "./icon";
 
 /**
  * Built on the native <dialog> element: free focus trapping, ESC-to-close,
@@ -50,9 +51,9 @@ export function Dialog({
           type="button"
           onClick={onClose}
           aria-label="Close dialog"
-          className="min-h-11 min-w-11 rounded-(--radius-button) text-(--color-muted) hover:bg-(--color-cloud)"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-(--radius-button) text-(--color-muted) hover:bg-(--color-cloud)"
         >
-          ×
+          <IconClose />
         </button>
       </div>
       <div className="p-4">{children}</div>

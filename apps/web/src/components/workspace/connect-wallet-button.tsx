@@ -5,6 +5,7 @@ import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AddressText } from "@/components/ui/address";
+import { IconAlertTriangle, IconWallet } from "@/components/ui/icon";
 import { MAINNET_CHAIN_ID } from "@/lib/deployment";
 
 /**
@@ -27,7 +28,7 @@ export function ConnectWalletButton() {
         disabled={!injected || isPending}
         onClick={() => injected && connect({ connector: injected })}
       >
-        {isPending ? "Connecting…" : "Connect wallet"}
+        <IconWallet /> {isPending ? "Connecting…" : "Connect wallet"}
       </Button>
     );
   }
@@ -35,7 +36,9 @@ export function ConnectWalletButton() {
   if (chainId !== MAINNET_CHAIN_ID) {
     return (
       <div className="flex items-center gap-2">
-        <Badge tone="warning">Wrong network</Badge>
+        <Badge tone="warning">
+          <IconAlertTriangle /> Wrong network
+        </Badge>
         <Button
           size="md"
           variant="ghost"

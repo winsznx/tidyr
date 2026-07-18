@@ -6,7 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AddressText } from "@/components/ui/address";
+import { IconCheck, IconTrash } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useWalletChainData } from "@/lib/use-wallet-chain-data";
 import type { WalletRecord } from "@/store/wallets";
 import { useWalletStore } from "@/store/wallets";
@@ -62,12 +64,14 @@ export function WalletCard({ wallet }: { wallet: WalletRecord }) {
       <div className="flex gap-2 pt-1">
         {!wallet.isPrimary ? (
           <Button size="md" variant="ghost" onClick={() => setPrimary(wallet.address)}>
-            Set primary
+            <IconCheck /> Set primary
           </Button>
         ) : null}
-        <Button size="md" variant="ghost" onClick={() => removeWallet(wallet.address)}>
-          Remove
-        </Button>
+        <Tooltip label="Remove wallet">
+          <Button size="md" variant="ghost" onClick={() => removeWallet(wallet.address)}>
+            <IconTrash /> Remove
+          </Button>
+        </Tooltip>
       </div>
     </Card>
   );

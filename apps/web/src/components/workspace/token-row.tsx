@@ -20,7 +20,15 @@ const ACTION_LABELS: Record<PlanActionType, string> = {
   revoke: "Revoke",
 };
 
-export function TokenRow({ wallet, token }: { wallet: Address; token: TokenBalanceRow }) {
+export function TokenRow({
+  wallet,
+  token,
+  hideNoRouteCandidate = false,
+}: {
+  wallet: Address;
+  token: TokenBalanceRow;
+  hideNoRouteCandidate?: boolean;
+}) {
   const { data: sellCapability, isLoading } = useSellCapability(token.address);
   const wallets = useWalletStore((s) => s.wallets);
   const primaryWallet = wallets.find((w) => w.isPrimary);
@@ -28,6 +36,15 @@ export function TokenRow({ wallet, token }: { wallet: Address; token: TokenBalan
   const actions = usePlanStore((s) => s.actions);
 
   const currentAction = actions.find((a) => a.wallet === wallet && a.token === token.address);
+
+  if (
+    hideNoRouteCandidate &&
+    !isLoading &&
+    !sellCapability?.hasRouteToMon &&
+    !token.knownBurnable
+  ) {
+    return null;
+  }
 
   const availableActions: PlanActionType[] = ["discard"];
   if (sellCapability?.hasRouteToMon) availableActions.unshift("sell");

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { IconPlus } from "@/components/ui/icon";
 import { AddTokenDialog } from "@/components/workspace/add-token-dialog";
 import { AddWalletDialog } from "@/components/workspace/add-wallet-dialog";
 import { TokenInventory } from "@/components/workspace/token-inventory";
@@ -25,9 +26,11 @@ export default function WalletsPage() {
         <h1 className="font-display text-2xl font-medium text-(--color-heading)">Wallets</h1>
         <div className="flex gap-2">
           <Button variant="ghost" onClick={() => setTokenDialogOpen(true)}>
-            Track token
+            <IconPlus /> Track token
           </Button>
-          <Button onClick={() => setWalletDialogOpen(true)}>Add wallet</Button>
+          <Button onClick={() => setWalletDialogOpen(true)}>
+            <IconPlus /> Add wallet
+          </Button>
         </div>
       </div>
 

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-
 import { cn } from "@/lib/cn";
 import { truncateAddress } from "@/lib/format";
+import { IconCopy, IconExternalLink } from "./icon";
+import { Tooltip } from "./tooltip";
+import { useToast } from "./toast";
 
 /**
  * Renders an address/hash in IBM Plex Mono with a copy control. The full
@@ -20,14 +21,13 @@ export function AddressText({
   value: string;
   chars?: number;
   explorerUrl?: string;
-  className?: string;
+  className?: string | undefined;
 }) {
-  const [copied, setCopied] = useState(false);
+  const showToast = useToast();
 
   async function handleCopy() {
     await navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    showToast("Copied to clipboard");
   }
 
   return (
@@ -38,24 +38,28 @@ export function AddressText({
       )}
     >
       <span title={value}>{truncateAddress(value, chars)}</span>
-      <button
-        type="button"
-        onClick={handleCopy}
-        aria-label={copied ? "Copied" : `Copy ${value}`}
-        className="min-h-6 min-w-6 rounded text-(--color-fog) hover:text-(--color-accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent)"
-      >
-        {copied ? "✓" : "⧉"}
-      </button>
-      {explorerUrl ? (
-        <a
-          href={explorerUrl}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="text-(--color-fog) hover:text-(--color-accent)"
-          aria-label="View on explorer"
+      <Tooltip label="Copy address">
+        <button
+          type="button"
+          onClick={handleCopy}
+          aria-label={`Copy ${value}`}
+          className="flex min-h-6 min-w-6 items-center justify-center rounded text-(--color-fog) hover:text-(--color-accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent)"
         >
-          ↗
-        </a>
+          <IconCopy />
+        </button>
+      </Tooltip>
+      {explorerUrl ? (
+        <Tooltip label="View on explorer">
+          <a
+            href={explorerUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="flex items-center text-(--color-fog) hover:text-(--color-accent)"
+            aria-label="View on explorer"
+          >
+            <IconExternalLink />
+          </a>
+        </Tooltip>
       ) : null}
     </span>
   );
