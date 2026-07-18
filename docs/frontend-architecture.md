@@ -7,16 +7,16 @@ chain-only build (no backend exists yet).
 
 ## Stack
 
-| Concern | Choice | Why |
-|---|---|---|
-| Framework | Next.js 15, App Router | PRD §13 specifies Next.js; App Router is current stable |
-| UI runtime | React 19 | Next 15 default |
-| Styling | Tailwind CSS v4 (`@theme`) | `design.md` ships Tailwind v4 tokens directly |
-| Wallet | wagmi v2 + viem | PRD §13 specifies wagmi + viem |
-| Server/chain state | TanStack Query | wagmi's own dependency; reused directly, no second cache |
-| Local workflow state | Zustand | PRD §13 specifies Zustand |
-| Validation | Zod (via `@tidyr/shared`) | reuse existing schemas, no duplication |
-| Fonts | `next/font/google` (Space Grotesk, Inter, IBM Plex Mono) | no private Britti Sans binaries; see design-interpretation notes below |
+| Concern              | Choice                                                   | Why                                                                    |
+| -------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Framework            | Next.js 15, App Router                                   | PRD §13 specifies Next.js; App Router is current stable                |
+| UI runtime           | React 19                                                 | Next 15 default                                                        |
+| Styling              | Tailwind CSS v4 (`@theme`)                               | `design.md` ships Tailwind v4 tokens directly                          |
+| Wallet               | wagmi v2 + viem                                          | PRD §13 specifies wagmi + viem                                         |
+| Server/chain state   | TanStack Query                                           | wagmi's own dependency; reused directly, no second cache               |
+| Local workflow state | Zustand                                                  | PRD §13 specifies Zustand                                              |
+| Validation           | Zod (via `@tidyr/shared`)                                | reuse existing schemas, no duplication                                 |
+| Fonts                | `next/font/google` (Space Grotesk, Inter, IBM Plex Mono) | no private Britti Sans binaries; see design-interpretation notes below |
 
 ## Package layout
 

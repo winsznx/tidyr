@@ -9,6 +9,7 @@ export default tseslint.config(
       "**/out/**",
       "**/cache/**",
       "**/broadcast/**",
+      "**/.next/**",
       "packages/contracts/lib/**",
     ],
   },
@@ -28,7 +29,7 @@ export default tseslint.config(
     // Standalone Node CLI scripts (run directly via `node`, not bundled/typechecked
     // as part of any workspace package) - needs Node globals ESLint doesn't assume
     // by default.
-    files: ["scripts/**/*.mjs"],
+    files: ["**/scripts/**/*.mjs"],
     languageOptions: {
       globals: {
         process: "readonly",
