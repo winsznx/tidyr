@@ -2,10 +2,12 @@
 
 Every finding identified during this Phase 7 pass, in the format Task 7's operating
 rules require: finding ID, severity, reproduction, root cause, fix, regression test,
-commit hash, residual risk. Findings are listed in the order discovered. Commit
-hashes are filled in against the final commit list in
-`PHASE_7_SECURITY_COMPLETION_REPORT.md` (this document was written before those
-commits were created, then updated once they existed).
+commit hash, residual risk. Findings are listed in the order discovered.
+
+**Commit hashes** (see `PHASE_7_SECURITY_COMPLETION_REPORT.md` §4 for the full list
+with messages): F7-01/F7-02 → `d2ae834`; F7-03/F7-04 → `2359bd8`; F7-05/F7-06 →
+`dd67f1d`; F7-07 → `cca84fe`; F7-08 through F7-13 (Slither triage, no code
+change) → documented in `2a128a5`.
 
 Severity legend (per this Phase 7 prompt): **P0** immediate fund loss/arbitrary
 execution/false security claim; **P1** authorization bypass/replay/theft/adapter-

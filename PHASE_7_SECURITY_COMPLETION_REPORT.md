@@ -48,38 +48,25 @@ revertsUnlessBothAdaptersFrozen`, `test_repeatedFreeze_isHarmlessNoOp`,
 
 ## 3. Final commit
 
-See commit list below — the last commit in that list is the final commit for this
-phase.
+The six commits below plus one final small documentation-accuracy commit filling in
+their hashes here and in `artifacts/security/findings.md` (a self-reference a commit
+cannot make about its own future hash) — see `git log --oneline
+security-addendum-candidate..HEAD` for the authoritative, current final commit.
 
 ## 4. Commits created this phase
 
 Focused, by root cause, no co-author trailers:
 
-1. `test: expand Permit2 authorization coverage` — substitution/replay tests through
-   `executeSweep` (chainId, cross-executor, plan-A-signature-on-plan-B, adapterKind
-   substitution) in `SweepExecutorAdversarial.t.sol`/`SweepExecutorCompleteness.t.sol`
-2. `test: add adversarial token and adapter cases` — `MockFalseReturnERC20`,
-   `MockNoReturnERC20`, `MockFeeOnTransferERC20`, `MockRevertingRecipient`,
-   `MockReentrantERC20`, `MockMaliciousAdapter`, and their tests in
-   `SweepExecutorAdversarial.t.sol`
-3. `test: strengthen executor invariants` — `attemptUnauthorizedAdmin` handler +
-   `invariant_ownerNeverChanges` in `SweepExecutorInvariants.t.sol`, new
-   `DemoDistributorInvariants.t.sol`
-4. `fix: rename shadowing local and initialize actionIndex explicitly` — the two
-   zero-risk Slither-triage fixes in `SweepExecutor.sol`
-5. `test: close coverage gaps in executor and adapter branch validation` —
-   `SweepExecutorCompleteness.t.sol` (zero-address admin inputs, native-MON-with-
-   zero-swaps, nonce skip-ahead, cross-chain/cross-executor replay, repeated freeze,
-   ownership transfer) and new `AdapterCompleteness.t.sol`
-6. `test: measure gas at plan-shape extremes` — new `SweepExecutorGas.t.sol` and
-   `MonadMainnetTopology.fork.t.sol`
-7. `docs: publish TIDYR contract threat model and Phase 7 security evidence` —
-   `docs/threat-model.md`, `docs/security-model.md`, `docs/audit-preparation.md`,
-   all `artifacts/security/*.md`, `docs/requirements-traceability.md`'s strengthened
-   Phase 9 gate, `PHASE_7_SECURITY_COMPLETION_REPORT.md`
+1. `2359bd8` — `test: expand Permit2 authorization coverage and add adversarial cases`
+2. `cca84fe` — `test: strengthen executor invariants and add DemoDistributor invariant`
+3. `d2ae834` — `fix: rename shadowing local and initialize actionIndex explicitly`
+4. `dd67f1d` — `test: close coverage gaps in adapter constructor and path validation`
+5. `9b0bdcc` — `test: measure gas at plan-shape extremes and verify Monad mainnet topology`
+6. `2a128a5` — `docs: publish TIDYR contract threat model and Phase 7 security evidence`
+7. (this commit) — `docs: record Phase 7 commit hashes in completion report and findings register`
 
-(Exact hashes recorded after these commits are created — see `git log --oneline
-security-addendum-candidate..HEAD` for the authoritative list once committed.)
+See `git log --oneline security-addendum-candidate..HEAD` to reproduce this list
+independently.
 
 ## 5. Files changed
 
