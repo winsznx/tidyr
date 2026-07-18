@@ -30,6 +30,7 @@ contract SweepExecutorHandler is Test {
     address public constant RECIPIENT = address(0xBEEF);
 
     uint256 public callCount;
+    uint256 public unauthorizedAdminAttempts;
 
     constructor(
         ISignatureTransfer permit2_,
@@ -87,6 +88,37 @@ contract SweepExecutorHandler is Test {
         vm.prank(OWNER);
         EXECUTOR.executeSweep(plan, sig);
         callCount++;
+    }
+
+    /// @dev Task 7.8 invariant: no unauthorized administrative call ever succeeds.
+    /// Drives every admin-only function from a pseudo-random non-owner address and
+    /// asserts each attempt reverts - the assertion is inline (not just relying on the
+    /// call reverting) so a regression that silently loosens `onlyOwner` is caught
+    /// even if the call happens not to revert for an unrelated reason.
+    function attemptUnauthorizedAdmin(uint256 callerSeed, uint8 actionSeed) external {
+        address caller = address(uint160(bound(callerSeed, 1, type(uint160).max)));
+        vm.assume(caller != EXECUTOR.owner());
+        unauthorizedAdminAttempts++;
+
+        uint256 action = actionSeed % 4;
+        vm.prank(caller);
+        if (action == 0) {
+            try EXECUTOR.registerOutputToken(address(USDC)) {
+                revert("unauthorized registerOutputToken succeeded");
+            } catch {}
+        } else if (action == 1) {
+            try EXECUTOR.removeOutputToken(address(USDC)) {
+                revert("unauthorized removeOutputToken succeeded");
+            } catch {}
+        } else if (action == 2) {
+            try EXECUTOR.freezeConfiguration() {
+                revert("unauthorized freezeConfiguration succeeded");
+            } catch {}
+        } else {
+            try EXECUTOR.recoverStrayTokens(address(DUST), 0, caller) {
+                revert("unauthorized recoverStrayTokens succeeded");
+            } catch {}
+        }
     }
 
     function _sign(SweepPlanLib.SweepPlan memory plan) internal view returns (bytes memory signature) {
@@ -162,5 +194,15 @@ contract SweepExecutorInvariantsTest is Test {
     /// successfully executed sweeps for this owner - it can never be skipped or reused.
     function invariant_nonceMatchesCallCount() public view {
         assertEq(executor.nonces(handler.OWNER()), handler.callCount());
+    }
+
+    /// @dev Task 7.8: ownership never silently changes (this test never calls
+    /// `transferOwnership`) - the complementary property, that every unauthorized
+    /// admin attempt reverted, is asserted inline inside the handler itself
+    /// (`attemptUnauthorizedAdmin` reverts loudly if any unauthorized call ever
+    /// succeeds), since checking "zero unauthorized successes" as a standing
+    /// invariant would spuriously fail before the handler has run at all.
+    function invariant_ownerNeverChanges() public view {
+        assertEq(executor.owner(), address(this));
     }
 }
