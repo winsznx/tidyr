@@ -1,9 +1,22 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS"
+    "builder": "NIXPACKS",
+    "buildCommand": "pnpm install --frozen-lockfile && node apps/web/scripts/generate-deployment-config.mjs && pnpm --filter @tidyr/web build",
+    "watchPatterns": [
+      "apps/web/**",
+      "packages/shared/**",
+      "packages/transaction-review/**",
+      "deployments/mainnet.json",
+      "package.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml"
+    ]
   },
   "deploy": {
+    "startCommand": "pnpm --filter @tidyr/web start",
+    "healthcheckPath": "/api/health",
+    "healthcheckTimeout": 100,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 5
   }
