@@ -24,4 +24,17 @@ export default tseslint.config(
       "@typescript-eslint/consistent-type-imports": "error",
     },
   },
+  {
+    // Standalone Node CLI scripts (run directly via `node`, not bundled/typechecked
+    // as part of any workspace package) - needs Node globals ESLint doesn't assume
+    // by default.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        fetch: "readonly",
+      },
+    },
+  },
 );

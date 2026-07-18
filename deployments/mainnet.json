@@ -1,0 +1,3 @@
+{
+  "note": "Placeholder. Populated by packages/contracts/script/Deploy.s.sol once Phase 9 (actual mainnet broadcast) runs. Phase 8 (this repository's current state) only validated this pipeline via a local Anvil fork and dry-run simulation against live Monad mainnet state - see docs/deployment-preflight.md - no real Monad mainnet deployment has occurred."
+}
