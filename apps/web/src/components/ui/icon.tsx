@@ -114,3 +114,67 @@ export function IconTrash(props: IconProps) {
     </svg>
   );
 }
+
+export function IconGrid(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" />
+      <rect x="9" y="2.5" width="4.5" height="4.5" rx="1" />
+      <rect x="2.5" y="9" width="4.5" height="4.5" rx="1" />
+      <rect x="9" y="9" width="4.5" height="4.5" rx="1" />
+    </svg>
+  );
+}
+
+export function IconSend(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M13.5 2.5 2.5 7l4.2 1.8L8.5 13z" />
+      <path d="M13.5 2.5 8.5 13l-1.8-4.2L13.5 2.5Z" />
+    </svg>
+  );
+}
+
+export function IconBell(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 6.5a4 4 0 0 1 8 0v3l1.2 2H2.8L4 9.5Z" />
+      <path d="M6.5 13.5a1.5 1.5 0 0 0 3 0" />
+    </svg>
+  );
+}
+
+export function IconMail(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <rect x="2" y="3.5" width="12" height="9" rx="1.5" />
+      <path d="M2.5 4.5 8 9l5.5-4.5" />
+    </svg>
+  );
+}
+
+export function IconMenu(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" />
+    </svg>
+  );
+}
+
+export function IconArrowUpRight(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M5 11 11 5" />
+      <path d="M6 5h5v5" />
+    </svg>
+  );
+}
+
+export function IconShield(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M8 2 13.5 4v4c0 3.5-2.3 5.8-5.5 6-3.2-.2-5.5-2.5-5.5-6V4Z" />
+      <path d="M5.7 8 7.3 9.6 10.3 6.3" />
+    </svg>
+  );
+}

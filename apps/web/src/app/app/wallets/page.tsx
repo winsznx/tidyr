@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { IconPlus } from "@/components/ui/icon";
+import { IconPlus, IconWallet } from "@/components/ui/icon";
 import { AddTokenDialog } from "@/components/workspace/add-token-dialog";
 import { AddWalletDialog } from "@/components/workspace/add-wallet-dialog";
 import { TokenInventory } from "@/components/workspace/token-inventory";
@@ -13,12 +14,14 @@ import { WalletCard } from "@/components/workspace/wallet-card";
 import { usePlanStore } from "@/store/plan";
 import { useWalletStore } from "@/store/wallets";
 
-export default function WalletsPage() {
+function WalletsPageContent() {
   const wallets = useWalletStore((s) => s.wallets);
   const actions = usePlanStore((s) => s.actions);
   const clearPlan = usePlanStore((s) => s.clearPlan);
   const [walletDialogOpen, setWalletDialogOpen] = useState(false);
   const [tokenDialogOpen, setTokenDialogOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams.get("q") ?? "";
 
   return (
     <div className="flex flex-col gap-8 pb-24">
@@ -42,18 +45,23 @@ export default function WalletsPage() {
         />
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {wallets.map((wallet) => (
-              <WalletCard key={wallet.address} wallet={wallet} />
-            ))}
-          </div>
+          <section className="flex flex-col gap-4">
+            <h2 className="flex items-center gap-2 font-display text-lg font-medium text-(--color-heading)">
+              <IconWallet /> Your wallets
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {wallets.map((wallet) => (
+                <WalletCard key={wallet.address} wallet={wallet} />
+              ))}
+            </div>
+          </section>
 
-          <div>
-            <h2 className="mb-4 font-display text-lg font-medium text-(--color-heading)">
+          <section className="flex flex-col gap-4">
+            <h2 className="font-display text-lg font-medium text-(--color-heading)">
               Token inventory
             </h2>
-            <TokenInventory wallets={wallets} />
-          </div>
+            <TokenInventory wallets={wallets} initialQuery={initialQuery} />
+          </section>
         </>
       )}
 
@@ -74,5 +82,13 @@ export default function WalletsPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+export default function WalletsPage() {
+  return (
+    <Suspense fallback={null}>
+      <WalletsPageContent />
+    </Suspense>
   );
 }

@@ -96,8 +96,14 @@ function WalletTokenTable({
   );
 }
 
-export function TokenInventory({ wallets }: { wallets: WalletRecord[] }) {
-  const [search, setSearch] = useState("");
+export function TokenInventory({
+  wallets,
+  initialQuery = "",
+}: {
+  wallets: WalletRecord[];
+  initialQuery?: string;
+}) {
+  const [search, setSearch] = useState(initialQuery);
   const [hideNoRouteCandidate, setHideNoRouteCandidate] = useState(false);
 
   if (wallets.length === 0) {

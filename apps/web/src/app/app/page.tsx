@@ -1,14 +1,24 @@
 "use client";
 
-import Link from "next/link";
-
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ProgressRing } from "@/components/ui/progress-ring";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useConnectionState, hasAnyWalletPath } from "@/lib/connection-state";
+import { StatCard } from "@/components/ui/stat-card";
+import { NextStepCard } from "@/components/workspace/dashboard/next-step-card";
+import { PlanBreakdownCard } from "@/components/workspace/dashboard/plan-breakdown-card";
+import { ProtocolStatusCard } from "@/components/workspace/dashboard/protocol-status-card";
+import { WalletsOverviewCard } from "@/components/workspace/dashboard/wallets-overview-card";
+import { DEMO_TOKENS } from "@/lib/deployment";
+import { hasAnyWalletPath, useConnectionState } from "@/lib/connection-state";
+import { usePlanStore } from "@/store/plan";
+import { useTrackedTokensStore } from "@/store/tracked-tokens";
+import { useWalletStore } from "@/store/wallets";
 
 export default function WorkspaceEntryPage() {
   const state = useConnectionState();
+  const wallets = useWalletStore((s) => s.wallets);
+  const actions = usePlanStore((s) => s.actions);
+  const manualTokens = useTrackedTokensStore((s) => s.manualTokens);
 
   if (!hasAnyWalletPath()) {
     return (
@@ -46,15 +56,49 @@ export default function WorkspaceEntryPage() {
     );
   }
 
+  const walletsWithActions = new Set(actions.map((a) => a.wallet)).size;
+  const actionCoverage = wallets.length > 0 ? (walletsWithActions / wallets.length) * 100 : 0;
+  const primaryWallet = wallets.find((w) => w.isPrimary);
+
   return (
-    <EmptyState
-      title="Workspace ready"
-      description="Add wallets and scan for tokens to start building a cleanup plan."
-      action={
-        <Link href="/app/wallets">
-          <Button>Go to wallets</Button>
-        </Link>
-      }
-    />
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="font-display text-2xl font-medium text-(--color-heading)">Dashboard</h1>
+        <p className="mt-1 text-sm text-(--color-body)">
+          Live state from Monad mainnet — nothing on this page is fabricated.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Wallets connected" value={wallets.length} href="/app/wallets" />
+        <StatCard
+          label="Tokens tracked"
+          value={DEMO_TOKENS.length + manualTokens.length}
+          subLabel={`${DEMO_TOKENS.length} known + ${manualTokens.length} manually tracked`}
+          href="/app/wallets"
+        />
+        <StatCard label="Actions planned" value={actions.length} href="/app/wallets" />
+        <StatCard
+          label="Primary wallet"
+          value={primaryWallet ? "Set" : "None"}
+          subLabel={primaryWallet ? primaryWallet.label : "Add a wallet to set one"}
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <WalletsOverviewCard wallets={wallets} />
+        </div>
+        <ProtocolStatusCard />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <PlanBreakdownCard actions={actions} />
+        <div className="flex flex-col items-center justify-center gap-2 rounded-(--radius-card) border border-(--color-border) bg-(--color-canvas) p-5">
+          <ProgressRing percent={actionCoverage} label="Wallets with a planned action" />
+        </div>
+        <NextStepCard walletsCount={wallets.length} actionsCount={actions.length} />
+      </div>
+    </div>
   );
 }
