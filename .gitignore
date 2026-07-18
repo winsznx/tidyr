@@ -16,4 +16,5 @@ coverage/
 .turbo/
 artifacts/security/*.tmp
 lcov.info
-internal/*.tsbuildinfo
+internal/
+*.tsbuildinfo
