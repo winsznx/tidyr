@@ -1,0 +1,58 @@
+{
+  "note": "PROPOSED diff only. deployments/mainnet.json is NOT modified by this packet. Values below are placeholders for fields whose real values do not exist until Phase 10 transactions are actually broadcast and confirmed; fields already knowable from the fork rehearsal are marked accordingly.",
+  "proposedAdditions": {
+    "phase10": {
+      "dust3WmonPool": {
+        "address": "UNKNOWN until real createPool is broadcast (fork rehearsal produced 0x78dDb77b9B9A821042A79AC77d7EF2726978eE83, but real mainnet CREATE2 salt/deployer nonce context means the real address must be read back after the real transaction, not assumed equal to the fork value)",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "initializationTransaction": "UNKNOWN until broadcast",
+        "sqrtPriceX96": "792281625142643392428113920",
+        "initialPriceDust3PerWmon": "10000",
+        "initialPriceWmonPerDust3": "0.0001"
+      },
+      "liquidityPosition": {
+        "tokenId": "UNKNOWN until real mint is broadcast",
+        "mintTransaction": "UNKNOWN until broadcast",
+        "tickLower": -98160,
+        "tickUpper": -86160,
+        "dust3Deposited": "UNKNOWN exact value until broadcast (modeled ~49,262.44 DUST3 of 50,000 desired)",
+        "wmonDeposited": "5000000000000000000",
+        "wmonDepositedHuman": "5 WMON"
+      },
+      "smokeSweep": {
+        "transaction": "UNKNOWN until broadcast",
+        "executionPlanHash": "UNKNOWN until broadcast (fork rehearsal produced 0x64ca4111ec9698605a1eca47af8beee752137e2ec7a4be77bc811c2217d3ae14, but the real plan's nonce/deadline will differ, producing a different real hash)",
+        "permit2Nonce": "UNKNOWN until chosen at real signing time",
+        "executorNonceConsumed": 0,
+        "dust3In": "200000000000000000000",
+        "actualUsdcOut": "UNKNOWN until broadcast (modeled + live-quoted estimate: 427 raw units)",
+        "finalizedBlock": "UNKNOWN until broadcast",
+        "gasUsed": "UNKNOWN until broadcast (fork rehearsal measured 401532 for executeSweep alone)"
+      },
+      "freeze": {
+        "pancakeV2AdapterFreezeTransaction": "UNKNOWN until broadcast - NOT sent by this packet",
+        "uniswapV3AdapterFreezeTransaction": "UNKNOWN until broadcast - NOT sent by this packet",
+        "sweepExecutorFreezeTransaction": "UNKNOWN until broadcast - NOT sent by this packet",
+        "configurationFrozenFinal": "NOT YET SET - freeze is explicitly deferred until after the smoke sweep is verified and separately approved"
+      }
+    }
+  },
+  "requiredFieldsOnceRealValuesExist": [
+    "dust3WmonPool.address",
+    "dust3WmonPool.initializationTransaction",
+    "liquidityPosition.tokenId",
+    "liquidityPosition.mintTransaction",
+    "liquidityPosition.dust3Deposited",
+    "smokeSweep.transaction",
+    "smokeSweep.executionPlanHash",
+    "smokeSweep.permit2Nonce",
+    "smokeSweep.actualUsdcOut",
+    "smokeSweep.finalizedBlock",
+    "smokeSweep.gasUsed",
+    "freeze.pancakeV2AdapterFreezeTransaction",
+    "freeze.uniswapV3AdapterFreezeTransaction",
+    "freeze.sweepExecutorFreezeTransaction",
+    "freeze.configurationFrozenFinal"
+  ]
+}
