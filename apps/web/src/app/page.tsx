@@ -1,10 +1,31 @@
+import { AnnouncementStrip } from "@/components/landing/announcement-strip";
+import { LandingNav } from "@/components/landing/nav";
+import { Hero } from "@/components/landing/hero";
+import { ProductPreview } from "@/components/landing/product-preview";
+import { Problem } from "@/components/landing/problem";
+import { Workflow } from "@/components/landing/workflow";
+import { MonadSection } from "@/components/landing/monad-section";
+import { SecuritySection } from "@/components/landing/security-section";
+import { ContractsTable } from "@/components/landing/contracts-table";
+import { DemoCta } from "@/components/landing/demo-cta";
+import { Footer } from "@/components/landing/footer";
+
 export default function LandingPage() {
   return (
-    <main className="mx-auto max-w-(--container-content) px-6 py-24">
-      <h1 className="font-display text-4xl font-semibold text-(--color-heading)">TIDYR</h1>
-      <p className="mt-4 max-w-xl text-(--color-body)">
-        Every Monad wallet. Cleaned in one verified session.
-      </p>
-    </main>
+    <>
+      <AnnouncementStrip />
+      <LandingNav />
+      <main>
+        <Hero />
+        <ProductPreview />
+        <Problem />
+        <Workflow />
+        <MonadSection />
+        <SecuritySection />
+        <ContractsTable />
+        <DemoCta />
+      </main>
+      <Footer />
+    </>
   );
 }

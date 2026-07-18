@@ -29,4 +29,42 @@ export const MAINNET_DEPLOYMENT = {
     "MON_NATIVE_SENTINEL (0xEeee...EEeE)",
     "USDC (0x754704Bc059F8C67012fEd69BC8A327a5aafb603)",
   ],
+  sourceVerification: {
+    sweepExecutor: {
+      verified: true,
+      url: "https://monadscan.com/address/0x7a844005998e896967a8b2bda13c7826f387e9c3",
+    },
+    pancakeV2Adapter: {
+      verified: true,
+      url: "https://monadscan.com/address/0xbb86d6ef057f03ca0bcab9f87b61894977b0dbcb",
+    },
+    uniswapV3Adapter: {
+      verified: true,
+      url: "https://monadscan.com/address/0xe80d042fbdc03da8262ed0669c75a394d2437d27",
+    },
+    dust1: {
+      verified: true,
+      url: "https://monadscan.com/address/0x196f8a0d53fc71ccbc672d81b55754fa5b9438a5",
+    },
+    dust2: {
+      verified: true,
+      url: "https://monadscan.com/address/0x4825cb1fcb1d3bb39bfbe15f477115937d46d960",
+    },
+    dust3: {
+      verified: true,
+      url: "https://monadscan.com/address/0x1b7eb110bdc1d0b7f85046ec812be77958e8b3c3",
+    },
+    dust4: {
+      verified: true,
+      url: "https://monadscan.com/address/0x645d6a93919362477cf625bd2db9d802b27097e2",
+    },
+    dust5: {
+      verified: true,
+      url: "https://monadscan.com/address/0xb9b200e7b56b6180e87c7f927a040647d8529e2f",
+    },
+    demoDistributor: {
+      verified: true,
+      url: "https://monadscan.com/address/0x49552a355ccb700e8ab18e392f1b05f0005c2d9e",
+    },
+  },
 } as const;

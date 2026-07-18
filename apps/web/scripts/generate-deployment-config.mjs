@@ -9,6 +9,8 @@ const mainnetJsonPath = path.join(repoRoot, "deployments", "mainnet.json");
 const outPath = path.join(here, "..", "src", "lib", "deployment.generated.ts");
 
 const mainnet = JSON.parse(readFileSync(mainnetJsonPath, "utf8"));
+const { provider: _sourceVerificationProvider, ...sourceVerificationByContract } =
+  mainnet.sourceVerification;
 
 const banner = `// GENERATED FILE — do not hand-edit.
 // Regenerate with \`pnpm --filter @tidyr/web generate:deployment\` after any
@@ -26,6 +28,7 @@ export const MAINNET_DEPLOYMENT = ${JSON.stringify(
     addresses: mainnet.addresses,
     dependencies: mainnet.dependencies,
     outputTokensAllowed: mainnet.outputTokensAllowed,
+    sourceVerification: sourceVerificationByContract,
   },
   null,
   2,
