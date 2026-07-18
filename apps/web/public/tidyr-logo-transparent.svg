@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" fill="none">
+  <title>TIDYR</title>
+  <desc>TIDYR geometric wordmark with cleanup pixel mark</desc>
+
+  <!-- Icon -->
+  <g transform="translate(28 38)">
+    <path d="M36 22H246V72H171V242H111V106L146 72H36V22Z" fill="#5E4CFF"/>
+    <rect x="12" y="102" width="28" height="28" fill="#272835"/>
+    <rect x="50" y="78" width="24" height="24" fill="#5E4CFF"/>
+    <rect x="58" y="132" width="26" height="26" fill="#272835"/>
+    <rect x="28" y="164" width="24" height="24" fill="#5E4CFF"/>
+    <rect x="68" y="198" width="28" height="28" fill="#272835"/>
+  </g>
+
+  <!-- Wordmark: custom geometric letters, no font dependency -->
+  <g transform="translate(330 57)" fill="#272835">
+    <!-- T -->
+    <path d="M0 0H150V44H98V206H52V44H0V0Z"/>
+    <!-- I -->
+    <path d="M190 0H236V206H190V0Z"/>
+    <!-- D -->
+    <path d="M278 0H365C432 0 470 38 470 103C470 168 432 206 365 206H278V0ZM324 42V164H362C400 164 422 143 422 103C422 63 400 42 362 42H324Z"/>
+    <!-- Y -->
+    <path d="M500 0H553L606 78L659 0H712L629 119V206H583V119L500 0Z"/>
+    <!-- R -->
+    <path d="M742 0H834C892 0 927 31 927 82C927 116 910 141 879 153L937 206H876L826 159H788V206H742V0ZM788 42V117H831C862 117 879 105 879 80C879 55 862 42 831 42H788Z"/>
+  </g>
+</svg>
