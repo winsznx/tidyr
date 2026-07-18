@@ -26,7 +26,32 @@ WebSocket confirmations) is exposed as an **honest "not yet available" /
 degraded state**, never fabricated. No backend code is written in this pass —
 that is future, separately-scoped work.
 
-## 1. Screen → capability map
+## 0.5. Recalibration checkpoint (tag `frontend-pre-execution-checkpoint`)
+
+The screen→capability map in §1 below describes the **target** design decided
+at F0. It was written before F5–F9 existed and reads as a single flat plan —
+it does not, by itself, distinguish what is actually implemented today from
+what F11–F14 will add later. This section is the authoritative "as-built"
+correction as of the checkpoint tag:
+
+| Area                                                                                                       | Status                                            | Accurate wording to use                                                                                                                                                                                                                                                                                                                                                                                                |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Token discovery (`/app/wallets`)                                                                           | Implemented, narrower than §1 implies             | **"Known and manually tracked assets"** — the 5 deployed demo tokens plus whatever addresses the user explicitly adds via `AddTokenDialog`. This is not arbitrary complete wallet-token discovery; there is no indexer to enumerate a wallet's full token list.                                                                                                                                                        |
+| Route existence (`useSellCapability`)                                                                      | Implemented, narrower than §1's "Sell" rows imply | **"Route candidate"** — proves a Uniswap V3 pool or Pancake V2 pair exists between the token and WMON. It does **not** prove a fresh executable quote exists, does not compute `minAmountOut`, and does not run an exact-wallet simulation. `canSell` is never set to `true` by this code; the UI only shows "Route via uniswap-v3/pancake-v2" or "No route found" — a candidate signal, not a proof of executability. |
+| Action planning (`PlanAction`, `/app/wallets`)                                                             | Implemented as inert local state only             | Assigning "Sell" writes `{ type: "sell" }` to the local Zustand plan store and nothing else — no quote is fetched, no signature is requested, nothing is broadcast. There is currently no downstream consumer of this state (F11 review does not exist yet), so it is inert by construction, not just by intent.                                                                                                       |
+| Revoke / Top-up / Multi-send                                                                               | Not implemented                                   | Correctly absent from the UI — these need allowance-history or multi-recipient logic this build doesn't have. Not a placeholder, not stubbed with fake data — simply not offered.                                                                                                                                                                                                                                      |
+| Review (`/app/review`), Signing (`/app/execute`), Execution monitor, Report (`/app/report/[manifestHash]`) | **Not implemented**                               | §1's rows for these routes describe the _target_ design only. The actual routes today render a static "ships in a later build pass" `EmptyState` (see F4 commit) with **no wiring** to Permit2, `executeSweep`, calldata decoding, simulation, or event-log reading. No manifest hash, execution-plan hash, or signature request is created anywhere in `apps/web` as of this checkpoint.                              |
+
+**Why this matters:** per the recalibration instruction, `canSell=true` (or
+any UI/doc language implying it) must never be asserted without a fresh
+executable quote _and_ a passing exact-wallet simulation — services that do
+not exist in this repository yet (see `packages/routing`, `packages/execution`
+stub status in §0 above). F11–F14 (real Permit2 signing, `executeSweep`
+broadcasting, calldata review, execution monitoring, finalized reports) are
+paused until those backend services exist, per the recalibration decision
+recorded in `FRONTEND_CHECKPOINT_REPORT.md`.
+
+## 1. Screen → capability map (target design — see §0.5 for as-built status)
 
 | Screen / surface                      | Data source used now                                                                                                                                                                                        | Contract calls                                                                      | Shared type                                             | Loading            | Empty               | Failure                     | Degraded (no backend)                                                                                                                                                                                                                |
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------ | ------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

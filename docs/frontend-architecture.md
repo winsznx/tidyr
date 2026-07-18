@@ -5,6 +5,16 @@ and [`frontend-state-machine.md`](./frontend-state-machine.md). Read
 `frontend-integration-matrix.md` first — it establishes that this is a
 chain-only build (no backend exists yet).
 
+**Status (tag `frontend-pre-execution-checkpoint`):** F0–F9 are implemented
+per `frontend-integration-matrix.md` §0.5's as-built corrections. F11–F14
+(real Permit2 signing, `executeSweep` broadcasting, calldata review,
+execution monitoring, finalized reports) are intentionally paused — see
+`FRONTEND_CHECKPOINT_REPORT.md` — until the backend services these surfaces
+require (dynamic asset discovery, capability assessment with executable
+quotes, routing/pricing, transaction preparation, exact-wallet simulation,
+execution monitoring, finalized reports) exist outside `apps/web`. Building
+those responsibilities inside React components was explicitly rejected.
+
 ## Stack
 
 | Concern              | Choice                                                   | Why                                                                    |

@@ -13,7 +13,7 @@ import { usePlanStore } from "@/store/plan";
 import { useWalletStore } from "@/store/wallets";
 
 const ACTION_LABELS: Record<PlanActionType, string> = {
-  sell: "Sell",
+  sell: "Sell (route candidate)",
   consolidate: "Consolidate",
   discard: "Discard",
   burn: "Burn",
@@ -58,9 +58,9 @@ export function TokenRow({ wallet, token }: { wallet: Address; token: TokenBalan
         {isLoading ? (
           <Skeleton className="h-5 w-24" />
         ) : sellCapability?.hasRouteToMon ? (
-          <Badge tone="success">Route via {sellCapability.routeVia}</Badge>
+          <Badge tone="success">Route candidate: {sellCapability.routeVia}</Badge>
         ) : (
-          <Badge tone="neutral">No route found</Badge>
+          <Badge tone="neutral">No route candidate found</Badge>
         )}
       </td>
       <td className="py-3">
