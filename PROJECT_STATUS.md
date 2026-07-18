@@ -872,3 +872,77 @@ follow-up, not part of this phase's component list.
 **Phase 8 may not begin.** This phase did not deploy anything, broadcast any
 transaction, or touch the frontend. The repository is assessed ready for a
 fresh-session adversarial audit (`docs/audit-preparation.md`).
+
+---
+
+## Independent Adversarial Audit of Phase 7
+
+An independent adversarial audit (`audit/phase-7-adversarial-*`) reproduced every
+material claim in the Phase 7 completion report directly (git state, all test/fuzz/
+invariant/fork/coverage/gas/Slither counts, the cross-language hash match) rather
+than trusting prior artifacts. **Verdict: PASS.** 5 findings, all P3
+documentation/tooling-accuracy issues with zero fund-safety impact (a Slither-triage
+undercount, a findings-table row-count mismatch, a stale field name in a doc, a
+referenced-but-missing doc file, a missing `format:check` script alias) - all five
+verified and fixed this session (`7b45cfd`). No P0/P1/P2. Phase 8 authorized.
+
+## Phase 8 — Mainnet Deployment Tooling and Preflight (No Broadcast)
+
+Per `docs/implementation-plan.md`'s phase table, Phase 8 is explicitly
+**"deployment tooling + preflight (no broadcast)"** — a stop gate requiring explicit
+user approval before Phase 9 (the actual mainnet broadcast). Full detail in
+`docs/deployment-preflight.md`.
+
+**Built:**
+
+- `packages/contracts/script/Deploy.s.sol` — deploys `PancakeV2Adapter`,
+  `UniswapV3Adapter`, `SweepExecutor`, five demo tokens, and `DemoDistributor` in the
+  correct dependency order; starts (but does not complete) the `Ownable2Step`
+  ownership transfer toward `PROTOCOL_OWNER_ADDRESS`; implements checks 1/2/4/5/6 of
+  the eight-point adapter-identity verification gate (`docs/requirements-
+traceability.md`), aborting the whole deployment on any mismatch; writes every
+  result to `deployments/mainnet.json`.
+- `scripts/verify-deployment-bytecode.mjs` — check 3 of 8 (masked runtime-bytecode
+  comparison): reads each compiled artifact's own `deployedBytecode.
+immutableReferences` metadata to mask constructor-argument byte ranges before
+  diffing live `eth_getCode` output against the compiled artifact, so legitimate
+  per-deployment constructor arguments never produce a false mismatch.
+- `docs/deployment-preflight.md` — the Phase 8 (dry-run) vs. Phase 9 (`--broadcast`)
+  modes, required environment variables, and the stop gate, spelled out explicitly.
+- `.env.example` — added the missing `UNISWAP_V3_SWAP_ROUTER02` variable
+  (`UniswapV3Adapter`'s constructor needs SwapRouter02, not the V3 factory).
+
+**Validated, never against real Monad mainnet:**
+
+1. A dry-run (`forge script` without `--broadcast`) against a live Monad-mainnet
+   RPC correctly rejected an unfunded throwaway deployer key at the preflight stage
+   (`PreflightFailed("deployer account has zero native MON balance")`) - proving the
+   preflight logic runs against genuinely live chain state.
+2. A full dry-run against an Anvil fork of live Monad mainnet state (chain ID 143
+   preserved, a funded local dev account) completed with `SIMULATION COMPLETE`across
+   every step: preflight, all nine contract deployments, ownership-transfer calls,
+   the identity-verification gate (checks 1/2/4/5/6 all logged `true`), and the
+   `deployments/mainnet.json` write — estimated cost ~9.53M gas / ~1.93 MON at the
+   fork's simulated gas price.
+3. A full `--broadcast` against that same local, disposable Anvil fork (never real
+   mainnet - Anvil is a throwaway local sandbox) proved the complete pipeline
+   including check 3: `verify-deployment-bytecode.mjs` correctly reported PASS for
+   both adapters against the genuinely persisted local deployment, and was
+   separately confirmed to correctly report FAIL (with the exact byte-length
+   mismatch reason) when pointed at a deliberately wrong contract occupying the
+   expected address.
+4. `deployments/mainnet.json` was reset to a placeholder after these local-only
+   tests — no simulated or local-fork data was left in place as if it were a real
+   deployment record.
+
+**Fixed along the way:** ESLint had no Node-global awareness for standalone
+`scripts/**/*.mjs` CLI scripts (`process`/`console`/`fetch` all flagged
+`no-undef`) - added a scoped `languageOptions.globals` override in
+`eslint.config.js` rather than disabling the rule.
+
+`forge test`: 152/152 unaffected. `pnpm lint`/`typecheck`/`build`/`test`: all clean.
+
+**No real Monad mainnet transaction was sent.** `deployments/mainnet.json` still
+holds only a placeholder. Phase 9 (the actual broadcast) requires separate, explicit
+user approval plus a funded `DEPLOYER_PRIVATE_KEY` in a local `.env.deploy` file —
+neither exists in this session.
