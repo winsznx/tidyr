@@ -1,101 +1,142 @@
-# TIDYR — Architecture (Pre-Frontend Baseline)
+# TIDYR — Architecture
 
-Status: draft, Phase 0. Reflects PRD Sections 1–18 as corrected by the binding Section 19
-addendum and the verified-source findings in `docs/research/`.
+Status: reflects the system as actually built and deployed, not the original
+PRD's aspirational plan. Where this document differs from `tidyr-production-prd.md`,
+this document is authoritative for what exists today; the PRD describes the
+longer-term target.
 
-## System overview
+## What actually exists today
+
+| Layer                         | Status                                                                                                                       | Where                                                                          |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Smart contracts               | **Real, deployed, frozen** on Monad mainnet (chain 143)                                                                      | `packages/contracts/`, `deployments/mainnet.json`                              |
+| Frontend                      | **Real, chain-only, staging-deployed**                                                                                       | `apps/web/`, live at the Railway staging URL in `STAGING_DEPLOYMENT_REPORT.md` |
+| Backend API                   | **Stub only** — a single `/health/live` route, no business logic                                                             | `apps/api/`                                                                    |
+| Indexer                       | **Stub only**                                                                                                                | `apps/indexer/`                                                                |
+| `packages/routing`            | **Stub only** — the frontend implements its own thin, chain-only route-candidate reads instead (`apps/web/src/lib/routing/`) | `packages/routing/`                                                            |
+| `packages/execution`          | **Stub only** — no execution wiring exists yet anywhere                                                                      | `packages/execution/`                                                          |
+| `packages/shared`             | Real — plan/action Zod schemas, `MON_NATIVE_SENTINEL`, adapter-kind enum, mirrored exactly from the Solidity source          | `packages/shared/`                                                             |
+| `packages/transaction-review` | Real — RFC 8785 canonical manifest hashing and Solidity-matching `executionPlanHash`, golden-vector tested                   | `packages/transaction-review/`                                                 |
+
+This gap between "PRD-envisioned" and "actually built" is intentional and
+documented at each decision point — see `docs/frontend-integration-matrix.md`
+§0 and `FRONTEND_CHECKPOINT_REPORT.md` for the recalibration that formalized
+it: build a real, honest chain-only frontend now rather than fabricate a
+backend that doesn't exist.
+
+## Contract layer (real, deployed, frozen)
 
 ```
-                         ┌─────────────────────┐
-                         │  Monad Mainnet (143) │
-                         │  SweepExecutor       │
-                         │  PancakeV2Adapter    │
-                         │  UniswapV3Adapter    │
-                         │  DemoToken x5        │
-                         │  DemoDistributor     │
-                         └─────────▲────────────┘
-                                   │ tx / events
-        ┌──────────────────────────┼───────────────────────────┐
-        │                          │                            │
-┌───────┴────────┐        ┌────────┴────────┐          ┌────────┴────────┐
-│  tidyr-indexer  │        │   tidyr-api     │          │  packages/       │
-│  finalized-event│◄──────►│  Hono           │◄────────►│  execution        │
-│  ingestion      │  writes│  discovery/quote│  used by │  (UI-independent  │
-│                 │        │  /simulate/report│         │   state machine)  │
-└───────┬────────┘        └────────┬────────┘          └────────┬────────┘
-        │                          │                            │
-   ┌────▼────┐               ┌─────▼─────┐                      │
-   │ Postgres │               │   Redis    │                      │
-   │ manifests│               │  quotes/   │                      │
-   │ reports  │               │  locks     │                      │
-   └──────────┘               └───────────┘                      │
-                                                                   │
-                                                        (frontend consumes this
-                                                         package later — not built
-                                                         in this phase)
+Monad mainnet (chain 143)
+┌────────────────────────────────────────────────────────────────┐
+│  SweepExecutor  (immutable adapter addresses, frozen)          │
+│    ├── PancakeV2Adapter   (frozen)                              │
+│    └── UniswapV3Adapter   (frozen)                              │
+│  DemoDistributor  (200 DUST1-5 per address, one claim each)     │
+│  DUST1..DUST5     (fixed-supply demo tokens; DUST4 is burnable) │
+└────────────────────────────────────────────────────────────────┘
 ```
+
+- **Closed adapter model**: `SweepExecutor`'s constructor fixes exactly two
+  adapter addresses. There is no registry and no admin call that can add a
+  third. A plan can only select `AdapterKind.PANCAKE_V2` or
+  `AdapterKind.UNISWAP_V3` — never an arbitrary address.
+- **Permit2 witness binding**: every `executeSweep` call is authorized by a
+  Permit2 `SignatureTransfer` witnessed to a specific `executionPlanHash`. A
+  signature for one plan cannot be replayed against a different plan, chain,
+  or executor deployment.
+- **Frozen since Phase 10**: `SweepExecutor`, `PancakeV2Adapter`, and
+  `UniswapV3Adapter` are all permanently frozen (`configurationFrozen() ==
+true` on all three). The output-token set (native MON + canonical USDC)
+  and both adapter identities are now immutable forever — see
+  `PHASE_10_COMPLETION_REPORT.md` for the exact freeze transactions.
+- Full security verification (fuzzing, invariants, adversarial mocks, fork
+  tests, Slither triage, manual review, an independent adversarial audit) is
+  in `PHASE_7_SECURITY_COMPLETION_REPORT.md` and `docs/threat-model.md`.
+
+## Frontend layer (real, chain-only)
+
+```
+apps/web (Next.js 15, App Router)
+┌──────────────────────────────────────────────────────────────┐
+│  Landing (/)  — marketing page, real contract addresses,      │
+│                 illustrative (labeled) product preview        │
+│  Workspace (/app/*)                                            │
+│    ├── Wallets     — connect / watch-only, live MON balance,   │
+│    │                 EIP-7702 delegation check (real on-chain  │
+│    │                 read, not assumed)                        │
+│    ├── Inventory   — multicall balance reads over known +      │
+│    │                 manually-tracked tokens (no indexer)      │
+│    ├── Planning    — Sell/Consolidate/Discard/Burn gated on    │
+│    │                 real "route candidate" reads              │
+│    ├── Review      — placeholder (paused, see below)           │
+│    ├── Execute     — placeholder (paused, see below)           │
+│    └── Report      — placeholder (paused, see below)           │
+│  Demo (/demo), Security (/security), Contracts (/contracts)    │
+└──────────────────────────────────────────────────────────────┘
+        │ direct viem/wagmi reads — no custom backend
+        ▼
+Monad mainnet (chain 143)
+```
+
+Everything the frontend shows is either a live chain read (via `viem`
+multicall / `wagmi`) or an explicitly-labeled illustrative value on the
+marketing page only. Nothing is fabricated. Where a real capability would
+require a backend that doesn't exist (indexed event history, aggregated
+pricing, off-chain simulation), the UI shows an honest degraded/unavailable
+state instead of faking it — see `docs/frontend-integration-matrix.md`.
+
+**Review, Execute, and Report are intentionally paused** — no Permit2
+signing, no `executeSweep` call, no calldata decoding, and no event-log
+report reconstruction exist anywhere in `apps/web` yet. This is a deliberate
+recalibration (`FRONTEND_CHECKPOINT_REPORT.md`), not an oversight: those
+surfaces depend on backend services (routing/pricing, exact-wallet
+simulation, execution monitoring, indexed reports) that must be built first,
+not improvised inside React components.
 
 ## Package boundaries
 
-| Package                       | Responsibility                                                                                                                                                  | Must NOT do                                                                         |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `packages/contracts`          | Foundry workspace: SweepExecutor, adapters, demo tokens, distributor, deploy/verify/liquidity scripts, full test suite                                          | Hold logic that belongs in TS packages (quoting, classification)                    |
-| `packages/shared`             | Chain config, deployed addresses, ABIs, Zod schemas, action/report types, error taxonomy                                                                        | Import server secrets; must be safe for eventual frontend use                       |
-| `packages/routing`            | PancakeV2 direct-pair quoting, Uniswap V3 quoting, 0x quoting, route comparison                                                                                 | Fabricate quotes when a provider is degraded — must return an honest degraded state |
-| `packages/transaction-review` | Display manifest + hash, execution plan + hash, calldata decode-and-compare, Permit2 typed data, gas review, simulation parsing, ERC-7730 descriptor generation | Approve a plan that fails any of the three review layers                            |
-| `packages/execution`          | Multi-wallet execution graph/state machine, wallet capability detection, reserve-aware native MON scheduling                                                    | Assume wallets support atomic batching without checking `wallet_getCapabilities`    |
-| `apps/api`                    | Hono service: discovery, allowances, quotes, simulation, manifest persistence, report retrieval, health                                                         | Proxy arbitrary RPC methods or arbitrary URLs; hold user keys                       |
-| `apps/indexer`                | Finalized-event ingestion, idempotent processing, report reconstruction                                                                                         | Treat unfinalized data as authoritative                                             |
-| `apps/web`                    | Reserved for the (later) frontend                                                                                                                               | Contain any UI screens in this phase                                                |
+| Package                       | Responsibility                                                                                                        | Must NOT do                                                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `packages/contracts`          | Foundry workspace: SweepExecutor, adapters, demo tokens, distributor, deploy/verify scripts, full test suite          | Hold logic that belongs in TS packages                                     |
+| `packages/shared`             | Deployed addresses (generated from `deployments/mainnet.json`), Zod schemas, adapter-kind enum, `MON_NATIVE_SENTINEL` | Import server secrets                                                      |
+| `packages/transaction-review` | Canonical manifest hashing (`displayManifestHash`), Solidity-matching `executionPlanHash`                             | Diverge from `SweepPlanLib.hashPlan`'s exact encoding                      |
+| `packages/routing`            | Stub — real routing logic lives in `apps/web/src/lib/routing/` until a real backend package replaces it               | —                                                                          |
+| `packages/execution`          | Stub — no execution wiring exists anywhere yet                                                                        | —                                                                          |
+| `apps/api`                    | Stub — a single liveness route                                                                                        | Business logic (not yet built)                                             |
+| `apps/indexer`                | Stub                                                                                                                  | Event ingestion (not yet built)                                            |
+| `apps/web`                    | The only real, user-facing surface today                                                                              | Fabricate backend-dependent data; sign or broadcast anything (F11+ paused) |
 
-## Data flow: plan → execution → report
+## Data flow today (chain-only, no backend)
 
-1. **Discovery** (`apps/api` + `packages/routing`): Moralis balance fetch → Multicall3
-   verification → allowance scan → quote attempt → classification
-   (`TokenAssessment { riskState, capabilities }` per PRD §19.16, not an exclusive enum).
-2. **Manifest** (`packages/transaction-review`): canonical RFC 8785 JSON →
-   `displayManifestHash`; typed execution-plan encoding → `executionPlanHash`. These are
-   two distinct hashes per PRD §19.3 — never conflated.
-3. **Authorization** (`packages/transaction-review` + wallet): Permit2 `SignatureTransfer`
-   witness bound to `executionPlanHash`; direct wallet-level revoke/approval transactions
-   are separate, non-executor-side actions per PRD §19.2.
-4. **Review** (`packages/transaction-review`): three mandatory layers — intent manifest,
-   calldata decode-and-compare, Tenderly simulation. All three must pass before a
-   signature card is shown.
-5. **Execution** (`packages/execution`): per-wallet execution graph; sequential within a
-   wallet, concurrent across wallets; commitment tracked through
-   BROADCAST → PROPOSED → VOTED → FINALIZED → VERIFIED (PRD §19.6).
-6. **Indexing** (`apps/indexer`): idempotent (`chainId + txHash + logIndex`) ingestion of
-   `SweepCompleted` / `ActionExecuted` / `ActionFailed` plus direct-transaction receipts.
-7. **Report** (`apps/api`): reconstructed strictly from finalized on-chain data — no
-   aggregate-counter-only inference (PRD §19.17).
+1. **Wallet connect** (`apps/web`, wagmi): injected connector or a manually
+   entered watch-only address; Monad chain (143) enforced.
+2. **Scan** (`apps/web`, viem multicall): balances for the 5 deployed demo
+   tokens plus any user-tracked address — never a full arbitrary-wallet
+   index, since no indexer exists.
+3. **Route candidate check** (`apps/web`, live reads): queries
+   `SweepExecutor.allowedOutputTokens` and both the Uniswap V3 and Pancake V2
+   factories directly. This proves a pool/pair _exists_ — it is explicitly
+   not a claim that a token is executable-sellable (`docs/frontend-integration-matrix.md` §0.5).
+4. **Plan** (`apps/web`, local Zustand state): inert — assigning an action
+   writes to local state only; nothing downstream consumes it yet.
+5. _(Review → Sign → Execute → Report: paused, see above.)_
 
-## Contract boundaries (binding — PRD §19.15)
+## Deployment record
 
-`SweepExecutor` validates plan fields, consumes exact Permit2-authorized amounts,
-executes allowlisted adapter swaps, performs transfers/discards/burns, unwraps WMON,
-settles output, isolates plan funds from pre-existing balances, emits action-level events.
-It never revokes EOA-owned allowances, never makes arbitrary calls, never stores funds
-between transactions.
+`deployments/mainnet.json` is the single source of truth for every contract
+address, dependency address, deployment transaction, source-verification
+status, and — since Phase 10 — the freeze transactions and final
+`configurationFrozen` state. `apps/web/src/lib/deployment.generated.ts` is
+generated from it (`apps/web/scripts/generate-deployment-config.mjs`) — no
+component ever hardcodes a `0x...` literal.
 
-`PancakeV2Adapter` and `UniswapV3Adapter` are thin, strictly-validated, allowlisted
-adapters that always return output to the executor and never hold funds.
+## Infrastructure
 
-`DemoDistributor` holds only demo inventory; one claim per address; no arbitrary
-withdrawal.
-
-## Key architectural corrections already applied from PRD §19 (see traceability matrix for full list)
-
-- No `RevokeAction[]` in `SweepPlan` — revocations are direct wallet transactions.
-- Two distinct hashes (`displayManifestHash`, `executionPlanHash`), not one shared manifest hash.
-- `PancakeV2Adapter` targets direct V2 pair contracts (no classic Router02 exists on Monad — see `docs/research/external-addresses.md` conflict C-1), not a PancakeSwap-hosted router.
-- Commitment states modeled as a 4-stage MonadBFT pipeline, not binary pending/confirmed.
-- Native MON reserve logic branches on EIP-7702 delegation status, per the precise Monad rule (not a flattened "always 10 MON" floor).
-- Atomic batching claims are gated on `wallet_getCapabilities`, never assumed.
-
-## Infrastructure (Railway-only, PRD §19.13)
-
-`tidyr-web`, `tidyr-api`, `tidyr-indexer`, managed Postgres, managed Redis. Postgres/Redis
-are never the source of truth for successful execution — finalized Monad receipts/events
-are authoritative. `DEPLOYER_PRIVATE_KEY` is a deployment-time-only secret, never present
-in any Railway service's runtime environment after ownership transfer.
+- **Contracts**: Monad mainnet, chain 143, RPC `https://rpc.monad.xyz`.
+- **Frontend**: Railway (Nixpacks builder), staging environment — see
+  `STAGING_DEPLOYMENT_REPORT.md` for the live URL and configuration. No
+  backend services are deployed (there's nothing real to deploy yet).
+- **Secrets**: `DEPLOYER_PRIVATE_KEY` lives only in the gitignored,
+  untracked `.env.deploy` used for one-time deployment/admin transactions —
+  never in any Railway service's environment.

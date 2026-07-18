@@ -1,8 +1,10 @@
 node_modules/
-.env
-.env.local
-.env.deploy
-.env.*.local
+
+# Env files - allow-list only; never let a real secret slip in by pattern miss
+.env*
+!.env.example
+!.env.*.example
+
 dist/
 build/
 .next/
@@ -18,3 +20,22 @@ artifacts/security/*.tmp
 lcov.info
 internal/
 *.tsbuildinfo
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# Deployment tooling
+.vercel/
+.railway/
+
+# Non-canonical lockfiles - this repo standardizes on pnpm (pnpm-lock.yaml)
+package-lock.json
+yarn.lock
+.pnpm-debug.log*
+
+# Key material - defense in depth, in addition to the .env* rule above
+*.pem
+*.key
