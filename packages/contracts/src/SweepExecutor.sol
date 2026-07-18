@@ -323,7 +323,10 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
         private
         returns (uint256 successCount, uint256 failCount)
     {
-        uint256 actionIndex;
+        // Explicit `= 0` (Phase 7 Slither triage, uninitialized-local): Solidity
+        // already zero-initializes this by default; the explicit assignment is a
+        // no-op that only removes detector noise for future audits.
+        uint256 actionIndex = 0;
 
         for (uint256 i = 0; i < plan.swaps.length; i++) {
             bool ok = _executeSwap(plan.swaps[i], settlementToken, plan.deadline, executionPlanHash, actionIndex);
@@ -463,11 +466,14 @@ contract SweepExecutor is Ownable2Step, ReentrancyGuard {
     /// @dev Returns whatever remains above each token's pre-pull baseline to the plan
     /// owner - unconsumed input (partial swap failure via allowFailure) or excess never
     /// belongs to the contract once execution completes (PRD §5.11, §19.10).
-    function _returnRemainders(address owner, address[] memory tokens, uint256[] memory baselines) private {
+    /// @dev Parameter named `planOwner`, not `owner` (Phase 7 Slither triage,
+    /// shadowing-local): the latter would shadow `Ownable.owner()` - purely a naming
+    /// clarity fix, no behavior change.
+    function _returnRemainders(address planOwner, address[] memory tokens, uint256[] memory baselines) private {
         for (uint256 i = 0; i < tokens.length; i++) {
             uint256 remainder = IERC20(tokens[i]).balanceOf(address(this)) - baselines[i];
             if (remainder > 0) {
-                IERC20(tokens[i]).safeTransfer(owner, remainder);
+                IERC20(tokens[i]).safeTransfer(planOwner, remainder);
             }
         }
     }
