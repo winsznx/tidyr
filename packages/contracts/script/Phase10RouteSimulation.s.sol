@@ -143,11 +143,15 @@ contract Phase10RouteSimulation is Script {
             tokenIn: DUST3,
             amountIn: swapAmount,
             adapterKind: SweepPlanLib.AdapterKind.UNISWAP_V3,
-            // 427 raw USDC units expected (modeled first leg + live-quoted second
-            // leg, see artifacts/phase-10/smoke-plan.json) less ~10% slippage
-            // tolerance, conservative because the first leg is modeled against a
-            // pool that doesn't exist yet rather than live-quoted.
-            minAmountOut: 384,
+            // 426 raw USDC units expected (modeled first leg + fresh live-quoted
+            // second leg, see artifacts/phase-10/revised-smoke-plan.json) less a
+            // tightened 2% slippage tolerance (Phase 10.1 economics review -
+            // measured total degradation was 0.721%, and the first leg is fully
+            // deterministic since we mint the pool ourselves in the same review
+            // cycle; 2% comfortably covers real WMON/USDC market drift between
+            // quote and broadcast without the excess 10% slack of the original
+            // packet).
+            minAmountOut: 417,
             routeData: path,
             allowFailure: false
         });

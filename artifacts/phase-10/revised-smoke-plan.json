@@ -1,0 +1,80 @@
+{
+  "status": "REVISED - engineering smoke test only, per Phase 10.1 economics review. Not proposed as the consumer-facing demo. No transaction broadcast to real mainnet.",
+  "supersedes": "artifacts/phase-10/smoke-plan.json (original packet, minAmountOut=384 / 10% tolerance)",
+  "network": "Monad mainnet",
+  "chainId": 143,
+  "readAtBlock": 88593939,
+  "source": "packages/contracts/script/Phase10RouteSimulation.s.sol, executed against anvil --fork-url https://rpc.monad.xyz (local fork only, never broadcast to real mainnet)",
+  "purposeLabel": "ENGINEERING SMOKE TEST - proves Permit2, exactInput multihop, deployed adapters, DUST3->WMON->USDC route, nonce behavior, and zero retained executor balances. Not a consumer-facing demo economics decision - see artifacts/phase-10/demo-options.md for that separate, still-open question.",
+  "freshQuote": {
+    "wmonUsdcPriceAtReadTime": "0.021454739338651316 USDC per WMON",
+    "priceMovementSincePriorPacket": "0.021499310749699093 -> 0.021454739338651316 (~0.2% over ~85 minutes) - real market drift, motivates the tightened but non-zero slippage tolerance",
+    "secondLegQuoteSource": "live QuoterV2.quoteExactInputSingle staticcall, this session"
+  },
+  "route": {
+    "adapterKind": 1,
+    "adapterKindName": "UNISWAP_V3",
+    "pathTokens": [
+      "0x1B7EB110BDc1D0b7F85046EC812Be77958E8b3c3",
+      "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
+      "0x754704Bc059F8C67012fEd69BC8A327a5aafb603"
+    ],
+    "pathTokenSymbols": ["DUST3", "WMON", "USDC"],
+    "pathFees": [3000, 3000]
+  },
+  "amounts": {
+    "amountIn": "200000000000000000000",
+    "amountInHuman": "200 DUST3 (one full DemoDistributor claim)",
+    "totalExpectedOutput": "426",
+    "totalExpectedOutputHuman": "0.000426 USDC",
+    "slippageTolerancePct": 2,
+    "slippageToleranceRationale": "Tightened from the original packet's 10% (artifacts/phase-10/economics-review.md §2). Measured total degradation (fees + slippage) is 0.721%; 2% covers ~2.8x that plus the ~0.2% real WMON/USDC drift observed between this session's two live reads, without leaving the excess 10% slack the original packet used.",
+    "minAmountOut": "417",
+    "minAmountOutCalculation": "floor(426 * 0.98) = 417"
+  },
+  "planFields": {
+    "owner": "0xbde0076F05B5eA898F9ca51f1b595D84598DE586",
+    "recipient": "0xbde0076F05B5eA898F9ca51f1b595D84598DE586",
+    "outputToken": "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
+    "outputTokenSymbol": "USDC",
+    "executionNonce": 0,
+    "executionNonceSource": "live cast call SweepExecutor.nonces(deployer) on real mainnet, re-confirmed this session - still 0, never used",
+    "deadlineNote": "A short window (10-15 minutes) must be set immediately before real signing - the 7200s value in the rehearsal script is for review convenience only."
+  },
+  "permit2": {
+    "spender": "0x7a844005998e896967A8b2BdA13c7826F387E9c3",
+    "permittedToken": "0x1B7EB110BDc1D0b7F85046EC812Be77958E8b3c3",
+    "permittedAmount": "200000000000000000000",
+    "permittedAmountHuman": "exactly 200 DUST3 - not unlimited",
+    "erc20AllowanceToPermit2": "200000000000000000000 (exact, not max)",
+    "signatureGeneration": "Generated fresh immediately before broadcast - never reused from this rehearsal."
+  },
+  "rehearsalResult": {
+    "description": "Real, successful local-fork rehearsal at the revised (2% slippage) configuration. No transaction here was sent to real mainnet.",
+    "executionPlanHash": "0x0692b2de285d56b9d1844812a9a5f338088947c34cfc97336d5878f56c178893",
+    "executionPlanHashChangedFromOriginalPacket": "0x64ca4111ec9698605a1eca47af8beee752137e2ec7a4be77bc811c2217d3ae14 -> 0x0692b2de285d56b9d1844812a9a5f338088947c34cfc97336d5878f56c178893 (changed because minAmountOut is part of the hashed plan)",
+    "dust3Spent": "200000000000000000000",
+    "usdcReceived": "426",
+    "executorUsdcBalanceAfter": "0",
+    "executorDust3BalanceAfter": "0",
+    "executeSweepGasUsed": 398440,
+    "executeSweepCalldata": "0x6bf2fe6800000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000360000000000000000000000000bde0076f05b5ea898f9ca51f1b595d84598de586000000000000000000000000bde0076f05b5ea898f9ca51f1b595d84598de586000000000000000000000000754704bc059f8c67012fed69bc8a327a5aafb603000000000000000000000000000000000000000000000000000000006a5bc20300000000000000000000000000000000000000000000000000000000000000004c33eaeca71db432a1c9b19f2f5b9c418319b31d4aded927f52360a41676b277000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000002c000000000000000000000000000000000000000000000000000000000000002e00000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000001b7eb110bdc1d0b7f85046ec812be77958e8b3c300000000000000000000000000000000000000000000000ad78ebc5ac6200000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000001a100000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000421b7eb110bdc1d0b7f85046ec812be77958e8b3c3000bb83bd359c1119da7da1d913d1c4d2b7c461115433a000bb8754704bc059f8c67012fed69bc8a327a5aafb6030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "note": "The trailing 65 bytes of the calldata above are the fork-signed Permit2 witness signature - reproducible in structure but not reusable, since a real broadcast requires a fresh signature over the real nonce/deadline at that time."
+  },
+  "gasTotals": {
+    "deposit": 44942,
+    "createPool": 4558970,
+    "initialize": 70386,
+    "approveDust3ToNfpm": 45981,
+    "approveWmonToNfpm": 46123,
+    "mint": 586910,
+    "approveDust3ToPermit2": 45909,
+    "executeSweep": 398440,
+    "coreSequenceTotal": 5797661,
+    "coreSequenceCostAt102Gwei": "~0.5914 MON",
+    "freezeSequenceTotal": 150017,
+    "freezeSequenceCostAt102Gwei": "~0.0153 MON (unchanged from original packet - not part of this revision, still not sent)",
+    "grandTotalGas": 5947678,
+    "grandTotalCostAt102Gwei": "~0.6067 MON"
+  }
+}
