@@ -1,0 +1,60 @@
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Context.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Errors.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Pausable.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/introspection/IERC165.sol#4)
+	- Version constraint ^0.8.0 is used by:
+		-^0.8.0 (lib/permit2/src/interfaces/IEIP712.sol#2)
+		-^0.8.0 (lib/permit2/src/interfaces/ISignatureTransfer.sol#2)
+	- Version constraint 0.8.26 is used by:
+		-0.8.26 (src/SweepExecutor.sol#2)
+		-0.8.26 (src/adapters/PancakeV2Adapter.sol#2)
+		-0.8.26 (src/adapters/UniswapV3Adapter.sol#2)
+		-0.8.26 (src/interfaces/IAdapter.sol#2)
+		-0.8.26 (src/interfaces/IBurnable.sol#2)
+		-0.8.26 (src/interfaces/IPancakeFactory.sol#2)
+		-0.8.26 (src/interfaces/IPancakePair.sol#2)
+		-0.8.26 (src/interfaces/ISwapRouter02.sol#2)
+		-0.8.26 (src/interfaces/IWMON.sol#2)
+		-0.8.26 (src/libraries/SweepPlanLib.sol#2)
+		-0.8.26 (src/libraries/TidyrWitness.sol#2)
+		-0.8.26 (src/libraries/UniswapV3Path.sol#2)
+		-0.8.26 (src/tokens/BurnableDemoToken.sol#2)
+		-0.8.26 (src/tokens/DemoDistributor.sol#2)
+		-0.8.26 (src/tokens/DemoToken.sol#2)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#different-pragma-directives-are-used
+INFO:Detectors:
+Detector: cyclomatic-complexity
+SweepExecutor.executeSweep(SweepPlanLib.SweepPlan,bytes) (src/SweepExecutor.sol#242-294) has a high cyclomatic complexity (12).
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#cyclomatic-complexity
+INFO:Detectors:
+Detector: solc-version
+Version constraint =0.8.17 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)
+	- VerbatimInvalidDeduplication
+	- FullInlinerNonExpressionSplitArgumentEvaluationOrder
+	- MissingSideEffectsOnSelectorAccess.
+It is used by:
+	- =0.8.17 (src/vendor/Permit2Marker.sol#2)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#incorrect-versions-of-solidity
+INFO:Detectors:
+Detector: low-level-calls
+Low level call in SweepExecutor._settleOutput(SweepPlanLib.SweepPlan,address,uint256,uint256) (src/SweepExecutor.sol#441-464):
+	- (ok,None) = plan.recipient.call{value: outputAmount}() (src/SweepExecutor.sol#455)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#low-level-calls
+INFO:Detectors:
+Detector: naming-convention
+Variable SweepExecutor.PERMIT2 (src/SweepExecutor.sol#72) is not in mixedCase
+Variable SweepExecutor.WMON (src/SweepExecutor.sol#73) is not in mixedCase
+Variable SweepExecutor.PANCAKE_V2_ADAPTER (src/SweepExecutor.sol#78) is not in mixedCase
+Variable SweepExecutor.UNISWAP_V3_ADAPTER (src/SweepExecutor.sol#79) is not in mixedCase
+Variable PancakeV2Adapter.FACTORY (src/adapters/PancakeV2Adapter.sol#23) is not in mixedCase
+Variable PancakeV2Adapter.WMON (src/adapters/PancakeV2Adapter.sol#24) is not in mixedCase
+Variable UniswapV3Adapter.ROUTER (src/adapters/UniswapV3Adapter.sol#24) is not in mixedCase
+Variable UniswapV3Adapter.WMON (src/adapters/UniswapV3Adapter.sol#25) is not in mixedCase
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#conformance-to-solidity-naming-conventions
+INFO:Detectors:
+Detector: too-many-digits
+UniswapV3Path.tokenAt(bytes,uint256) (src/libraries/UniswapV3Path.sol#20-26) uses literals with too many digits:
+	- token = mload(uint256)(path + 0x20 + offset) / 0x1000000000000000000000000 (src/libraries/UniswapV3Path.sol#24)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#too-many-digits
+INFO:Slither:. analyzed (48 contracts with 117 detectors), 37 result(s) found

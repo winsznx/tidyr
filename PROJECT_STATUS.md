@@ -796,3 +796,79 @@ deployed, source-verified adapter address from the same run, recorded in
 **Phase 8 may not begin. Phase 7 has still not begun.** This remediation pass is ready
 for independent re-audit. Once confirmed, Phase 7 (contract security verification)
 proceeds as originally planned on a dedicated branch.
+
+---
+
+## Phase 7 — Contract Security Verification
+
+**Trigger:** the follow-up re-audit above returned a CONDITIONAL PASS confirming the
+RA-01 remediation and its P2 tracked gate; the user confirmed the baseline (branch
+`security/phase-7-verification`, tag `security-addendum-candidate` at
+`1a5f70c43b4189e084f2367c9ca71c9539846404`) and requested Phase 7 proceed.
+
+**Pre-flight:** independently re-verified all ten baseline properties the user's
+Phase 7 prompt required (no production `registerAdapter`/`removeAdapter`, no
+registry, closed `AdapterKind`, invalid-ordinal rejection, immutable adapters,
+Multicall3 rejection, matching Solidity/TS hashes, Permit2 binding, the committed
+Phase 9 gate) directly against source/ABI/committed docs before making any change -
+all ten held true, so no Phase 7 finding was needed for the baseline itself.
+
+**Objective:** produce reproducible security evidence across
+`SweepExecutor`/adapters/hashing/Permit2/freeze/balance-isolation/failure-behavior/
+native-MON/demo-tokens/ownership, find and fix real weaknesses (not just add test
+count), and gate Phase 8 on the result.
+
+**What was done (full detail in `PHASE_7_SECURITY_COMPLETION_REPORT.md` and
+`artifacts/security/*`):**
+
+- **Threat model + security model + audit prep** (`docs/threat-model.md`,
+  `docs/security-model.md`, `docs/audit-preparation.md`) covering 16 threat
+  scenarios with asset/entry-point/defense/test-evidence/residual-risk each, honestly
+  naming the largest remaining gap (no wallet-level transaction-review boundary yet -
+  Phase 11) rather than claiming completeness.
+- **6 new test files, 6 new adversarial mocks:** `SweepExecutorAdversarial.t.sol`
+  (Permit2 substitution/replay through `executeSweep`, malicious-adapter variants,
+  malformed-token classification), `SweepExecutorCompleteness.t.sol` (nonce
+  skip-ahead, cross-chain/cross-executor replay, repeated freeze, ownership
+  transfer, zero-address admin inputs), `AdapterCompleteness.t.sol` (both adapters'
+  constructor/path-validation branches), `SweepExecutorGas.t.sol` (plan-shape
+  extremes), `DemoDistributorInvariants.t.sol`, `MonadMainnetTopology.fork.t.sol`.
+  `forge test`: **152/152** (was 103).
+- **Fuzz:** 4 properties (1 new) run explicitly at 10,000 runs each, all passing.
+- **Invariants:** 4 invariants (2 new - unauthorized-admin-boundary,
+  DemoDistributor one-claim-per-address), 8,192 calls each, 0 reverts. A genuine
+  test-harness artifact (not a production bug) was found and fixed while writing the
+  DemoDistributor invariant - see finding F7-07.
+- **Fork:** 11 new checks (Permit2/Multicall3/WMON/USDC bytecode, chain ID,
+  SwapRouter02 selector presence) against live Monad mainnet, plus the 2 pre-existing
+  - 13/13 pass, no broadcast.
+- **Slither:** ran to completion (39 findings; the exit code 255 the two prior audit
+  rounds recorded as "FAIL"/"not resolved" is Slither's normal findings-present exit
+  code, not a crash - clarified explicitly this pass). Every finding individually
+  triaged in `slither-triage.md`; two zero-risk fixes applied
+  (`_returnRemainders`'s `owner` param renamed to `planOwner`, explicit
+  `actionIndex = 0`); final count 37, zero unresolved critical/high, no blanket
+  suppression.
+- **Gas/coverage/manual review:** worst-case `executeSweep` measured at 3.6M gas
+  (50 distinct-token plan); branch coverage raised from 87.10%/61.54%/75% to
+  93.55%/92.31%/100% across `SweepExecutor`/`PancakeV2Adapter`/`UniswapV3Adapter`;
+  full line-by-line CEI/reentrancy/nonce/hash/route/ownership/freeze review recorded,
+  surfacing one informational-only finding (an unreachable zero-owner clause in
+  three constructors, since OZ's own `Ownable` constructor reverts first - no fix
+  needed, documented for future-auditor clarity).
+- **Phase 9 gate strengthened further:** `docs/requirements-traceability.md`'s row
+  now mandates runtime-bytecode comparison, constructor-argument verification,
+  adapter-dependency read-back, and proxy rejection - not just address equality.
+
+**Counts:** P0 0 · P1 0 · P2 3 (all test-coverage gaps against already-correct code)
+· P3 10 (2 code fixes, 1 test-harness fix, 7 documented/no-fix-needed). Full register
+in `artifacts/security/findings.md`.
+
+**Also flagged (out of this phase's contract-security scope, not fixed):**
+`apps/api`'s `hono` dependency is significantly outdated (`pnpm audit`: 39 findings,
+7 high) - recorded in `artifacts/security/test-summary.md` as a recommended
+follow-up, not part of this phase's component list.
+
+**Phase 8 may not begin.** This phase did not deploy anything, broadcast any
+transaction, or touch the frontend. The repository is assessed ready for a
+fresh-session adversarial audit (`docs/audit-preparation.md`).
