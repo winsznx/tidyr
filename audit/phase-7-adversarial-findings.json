@@ -1,0 +1,99 @@
+{
+  "audit": "TIDYR Phase 7 independent adversarial verification",
+  "branch": "security/phase-7-verification",
+  "baseline_commit": "1a5f70c",
+  "final_commit": "3290568",
+  "verdict": "PASS",
+  "counts": { "P0": 0, "P1": 0, "P2": 0, "P3": 5 },
+  "findings": [
+    {
+      "id": "AF-01",
+      "severity": "P3",
+      "category": "documentation-accuracy",
+      "file": "artifacts/security/slither-triage.md",
+      "line": 115,
+      "summary": "Slither triage document itemizes calls-loop as \"8 instances\" (items 8-15) but an independent re-run of `slither . --exclude-dependencies --json` produces exactly 10 distinct calls-loop results, not 8.",
+      "evidence": "Independent `slither` JSON output parsed programmatically: calls-loop count = 10. Manually enumerated the 10 call sites from the raw detector text (SweepExecutor.executeSweep baseline read, received-amount read, _executeSwap before/adapter.swap/actualOut reads, _executeActions burn call, _returnRemainders remainder read, PancakeV2Adapter._pairFor/_getReserves/_swap). The document's low-severity section header total (\"Low severity (15)\") is arithmetically consistent only with calls-loop=10 (10+3 timestamp+2 operator-fee-outlier=15), contradicting its own body text claiming 8 instances.",
+      "reproduction": "cd packages/contracts && slither . --exclude-dependencies --json /tmp/s.json && python3 -c \"import json,collections; d=json.load(open('/tmp/s.json')); print(collections.Counter(r['check'] for r in d['results']['detectors'])['calls-loop'])\" # prints 10",
+      "failure_scenario": "Not exploitable — this is a documentation counting error, not a code defect. The category-level rationale given (all loops bounded by MAX_ACTIONS=50) applies equally to all 10 actual instances, so no unaddressed loop exists. Risk is solely that a future reviewer trusting the itemized list undercounts what was actually triaged.",
+      "consequence": "None to fund safety. Minor erosion of trust in the Slither triage document's self-reported completeness/precision.",
+      "remediation": "Update slither-triage.md's calls-loop section to enumerate all 10 actual call sites (or explicitly state the count as 10 and adjust the itemized numbering 8-17), so the itemized list and the section-total header (15) are consistent.",
+      "regression_test": "None applicable (documentation-only)."
+    },
+    {
+      "id": "AF-02",
+      "severity": "P3",
+      "category": "documentation-accuracy",
+      "file": "artifacts/security/findings.md",
+      "line": 135,
+      "summary": "F7-08 through F7-13 is described as covering \"six Slither High/Medium findings,\" but the accompanying table only lists five rows (F7-08 through F7-12); no distinct F7-13 row exists, even though the P3 total (10) in the summary table only reconciles if F7-08..F7-13 is treated as 6 items.",
+      "evidence": "Table under \"F7-08 through F7-13\" has exactly 5 rows: arbitrary-send-eth, reentrancy-balance, proxy-storage-collision, amm-spot-oracle-dependency, and \"unused-return (×2)\" merged into a single row. slither-triage.md separately and correctly triages both unused-return findings as distinct items (findings 5 and 6), so the underlying triage work is complete — only the findings.md summary table's row-to-ID mapping is inconsistent.",
+      "reproduction": "Read artifacts/security/findings.md lines 135-147 and compare row count (5) against the header's claimed range (F7-08 through F7-13 = 6 IDs) and the P3 summary row's count (10, which requires 6 items in this bucket to sum correctly).",
+      "failure_scenario": "Not exploitable. Both underlying Slither findings this covers (the two unused-return instances) are individually triaged with sound reasoning in slither-triage.md; only the summary table in findings.md has a labeling/row-count inconsistency.",
+      "consequence": "None to fund safety. Minor traceability gap between the finding-ID scheme and its own summary table.",
+      "remediation": "Split the merged \"unused-return (×2)\" row into two rows (F7-12, F7-13) in findings.md to match the stated ID range and the slither-triage.md itemization.",
+      "regression_test": "None applicable (documentation-only)."
+    },
+    {
+      "id": "AF-03",
+      "severity": "P3",
+      "category": "documentation-accuracy",
+      "file": "docs/permit2-witness-model.md",
+      "line": 26,
+      "summary": "The witness-binding field table still lists \"adapter\" (the pre-RA-01 arbitrary-address field name) instead of \"adapterKind\" (the current closed-enum field), a stale reference left over from before the RA-01 remediation renamed this field.",
+      "evidence": "Table row: \"every swap: tokenIn, amountIn, adapter, minAmountOut, keccak256(routeData), allowFailure\" — but SweepPlanLib.sol's SwapAction struct has no field named `adapter`; the actual field is `adapterKind` (SweepPlanLib.AdapterKind). golden-vectors.md's own revision history documents this exact rename.",
+      "reproduction": "Compare docs/permit2-witness-model.md:26 against packages/contracts/src/libraries/SweepPlanLib.sol's SwapAction struct definition and _hashSwapActions implementation.",
+      "failure_scenario": "Not exploitable — the contract code and its tests are correct; only this one doc table cell uses stale terminology.",
+      "consequence": "None to fund safety. Could mildly confuse a future reader cross-referencing this doc against the current struct.",
+      "remediation": "Update the table cell from \"adapter\" to \"adapterKind\" to match the current struct field name.",
+      "regression_test": "None applicable (documentation-only)."
+    },
+    {
+      "id": "AF-04",
+      "severity": "P3",
+      "category": "audit-scope",
+      "file": "docs (requested but absent)",
+      "line": null,
+      "summary": "The audit brief requested review of `docs/fixed-adapter-architecture.md`, but no such file exists in the repository; the closest analogous document is `docs/approval-architecture.md`.",
+      "evidence": "`ls docs/` shows: approval-architecture.md, architecture.md, audit-preparation.md, implementation-plan.md, permit2-witness-model.md, pricing-and-oracle-model.md, requirements-traceability.md, risk-register.md, security-addendum-review.md, security-model.md, threat-model.md, token-support-model.md, research/ — no fixed-adapter-architecture.md.",
+      "reproduction": "ls /Users/mac/tidyr/docs/",
+      "failure_scenario": "Not exploitable — no code or security implication. Either the brief referenced a planned-but-unwritten doc name, or the actual content lives under a different filename (docs/approval-architecture.md covers closely related material and was reviewed as a substitute).",
+      "consequence": "None to fund safety. Minor documentation-inventory gap between what the operating brief expects and what exists.",
+      "remediation": "Either author docs/fixed-adapter-architecture.md (if distinct content was intended beyond what security-model.md §1 and approval-architecture.md already cover) or update whichever checklist names this file to point at the correct existing doc.",
+      "regression_test": "None applicable (documentation-only)."
+    },
+    {
+      "id": "AF-05",
+      "severity": "P3",
+      "category": "tooling-drift",
+      "file": "package.json",
+      "line": 13,
+      "summary": "The root package.json defines a `format` script (`prettier --check .`) but no `format:check` script; running the literal command `pnpm format:check` (as named in this audit's own instructions and implied by common CI convention) fails with ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL.",
+      "evidence": "`pnpm format:check` → \"Command \\\"format:check\\\" not found. Did you mean \\\"format:write\\\"?\" package.json scripts are: build, typecheck, lint, format, format:write, test, security:secrets, contracts:build, contracts:test — no format:check.",
+      "reproduction": "cd /Users/mac/tidyr && pnpm format:check",
+      "failure_scenario": "Not exploitable. A CI pipeline or reviewer literally invoking `pnpm format:check` (matching this audit brief's naming) would get a spurious failure rather than a formatting result; `pnpm format` is the actual working equivalent and was confirmed clean.",
+      "consequence": "None to fund safety. Minor script-naming inconsistency that could confuse CI configuration or onboarding.",
+      "remediation": "Either rename the `format` script to `format:check` (matching the more common Prettier convention alongside `format:write`) or document that `pnpm format` is the check command.",
+      "regression_test": "None applicable (tooling-only)."
+    }
+  ],
+  "reproduced_totals": {
+    "solidity_tests": 152,
+    "typescript_tests": 30,
+    "fuzz_properties": 4,
+    "fuzz_runs_each": 10000,
+    "invariants": 4,
+    "invariant_calls_each": 8192,
+    "fork_tests": 13,
+    "worst_case_gas": 3605566,
+    "slither_findings_total": 37,
+    "slither_unresolved_critical_high": 0,
+    "pnpm_audit_vulnerabilities": { "total": 39, "high": 7, "moderate": 29, "low": 3, "scope": "apps/api hono dependency, out of contract scope" },
+    "coverage": {
+      "SweepExecutor.sol": { "lines": "98.53%", "branches": "93.55% (29/31)" },
+      "PancakeV2Adapter.sol": { "lines": "100%", "branches": "92.31% (12/13)" },
+      "UniswapV3Adapter.sol": { "lines": "100%", "branches": "100% (8/8)" },
+      "SweepPlanLib.sol": { "lines": "100%", "branches": "100%" }
+    }
+  }
+}

@@ -12,6 +12,7 @@
     "typecheck": "pnpm -r --filter=./apps/* --filter=./packages/* run typecheck",
     "lint": "eslint .",
     "format": "prettier --check .",
+    "format:check": "prettier --check .",
     "format:write": "prettier --write .",
     "test": "pnpm -r --filter=./apps/* --filter=./packages/* run test",
     "security:secrets": "bash scripts/scan-secrets.sh",

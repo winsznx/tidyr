@@ -13,20 +13,20 @@ plan's `executionPlanHash`.
 `executionPlanHash = SweepPlanLib.hashPlan(plan, chainId, executor)` covers, directly or
 via per-action-array sub-hashes:
 
-| Bound field                                                                                          | Where                                                                                                      |
-| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `chainId`                                                                                            | explicit first parameter (added by this review)                                                            |
-| `executor` (SweepExecutor's own address)                                                             | explicit second parameter (added by this review)                                                           |
-| `owner`                                                                                              | `plan.owner`                                                                                               |
-| `recipient`                                                                                          | `plan.recipient`                                                                                           |
-| `outputToken`                                                                                        | `plan.outputToken`                                                                                         |
-| `deadline`                                                                                           | `plan.deadline`                                                                                            |
-| `nonce`                                                                                              | `plan.nonce` (TIDYR's own sequential per-owner nonce, reused as Permit2's own unordered nonce — see below) |
-| `displayManifestHash`                                                                                | `plan.displayManifestHash`                                                                                 |
-| every swap: `tokenIn`, `amountIn`, `adapter`, `minAmountOut`, `keccak256(routeData)`, `allowFailure` | `_hashSwapActions`                                                                                         |
-| every transfer: `token`, `amount`, `to`                                                              | `_hashTransferActions`                                                                                     |
-| every discard: `token`, `amount`                                                                     | `_hashDiscardActions`                                                                                      |
-| every burn: `token`, `amount`                                                                        | `_hashBurnActions`                                                                                         |
+| Bound field                                                                                              | Where                                                                                                      |
+| -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `chainId`                                                                                                | explicit first parameter (added by this review)                                                            |
+| `executor` (SweepExecutor's own address)                                                                 | explicit second parameter (added by this review)                                                           |
+| `owner`                                                                                                  | `plan.owner`                                                                                               |
+| `recipient`                                                                                              | `plan.recipient`                                                                                           |
+| `outputToken`                                                                                            | `plan.outputToken`                                                                                         |
+| `deadline`                                                                                               | `plan.deadline`                                                                                            |
+| `nonce`                                                                                                  | `plan.nonce` (TIDYR's own sequential per-owner nonce, reused as Permit2's own unordered nonce — see below) |
+| `displayManifestHash`                                                                                    | `plan.displayManifestHash`                                                                                 |
+| every swap: `tokenIn`, `amountIn`, `adapterKind`, `minAmountOut`, `keccak256(routeData)`, `allowFailure` | `_hashSwapActions`                                                                                         |
+| every transfer: `token`, `amount`, `to`                                                                  | `_hashTransferActions`                                                                                     |
+| every discard: `token`, `amount`                                                                         | `_hashDiscardActions`                                                                                      |
+| every burn: `token`, `amount`                                                                            | `_hashBurnActions`                                                                                         |
 
 A signature over one plan cannot authorize a different plan: changing any bound field
 changes `executionPlanHash`, changes the witness, and invalidates the signature. Proven

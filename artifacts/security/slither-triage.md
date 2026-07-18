@@ -112,19 +112,40 @@ delegatecall packages/contracts/src` returns zero matches (the only hit is this
 `planOwner` — zero behavior change, `forge test`: 136/136 still passing after the
 rename. See `packages/contracts/src/SweepExecutor.sol`.
 
-### 8-15. `calls-loop` (8 instances)
+### 8-17. `calls-loop` (10 instances)
 
-Locations: `_executeSwap`'s `forceApprove`/`adapter.swap` inside the swap loop,
-`_executeActions`'s per-action `safeTransfer`/`burn` calls inside the
-transfer/discard/burn loops, the baseline/remainder `balanceOf`/`safeTransfer` loops
-over `tokens[]`, and `PancakeV2Adapter._swap`'s per-hop `IPancakePair.swap` call
-inside its path loop.
+Reproduced independently (`AF-01`, external adversarial audit): an earlier version
+of this section undercounted these as 8 instances by description; the raw detector
+output actually contains exactly 10 distinct `calls-loop` results. Corrected here so
+the itemized count matches both the raw tool output and this section's own "Low
+severity (15)" header total (10 `calls-loop` + 3 `timestamp` + 2
+`operator-fee-outlier` = 15).
+
+The 10 locations:
+
+1. `SweepExecutor.executeSweep`'s baseline-balance read loop over `tokens[]`
+   (src/SweepExecutor.sol:242, 267)
+2. `SweepExecutor.executeSweep`'s received-amount check loop over `tokens[]`
+   (src/SweepExecutor.sol:242, 275)
+3. `SweepExecutor._executeActions`'s dispatch loop calling `_executeSwap`
+   (src/SweepExecutor.sol:322, 374)
+4. `SweepExecutor._executeSwap`'s `forceApprove` call (src/SweepExecutor.sol:395, 406)
+5. `SweepExecutor._executeSwap`'s `adapter.swap` call (src/SweepExecutor.sol:395, 408)
+6. `SweepExecutor._executeSwap`'s post-call balance re-read (src/SweepExecutor.sol:395, 413)
+7. `SweepExecutor._returnRemainders`'s remainder `balanceOf`/`safeTransfer` loop over
+   `tokens[]` (src/SweepExecutor.sol:472, 474)
+8. `PancakeV2Adapter._swap`'s per-hop `IPancakePair.swap` call inside its path loop
+   (src/adapters/PancakeV2Adapter.sol:144, 147)
+9. `PancakeV2Adapter._getAmountsOut`'s per-hop `_getReserves` call inside its path
+   loop (src/adapters/PancakeV2Adapter.sol:152, 153)
+10. `PancakeV2Adapter._validatePath`'s per-hop intermediate-asset check
+    (src/adapters/PancakeV2Adapter.sol:110, 118)
 
 - **Detector claim:** external calls inside a loop can multiply gas cost or
   reentrancy surface per iteration.
 - **Actual issue:** every one of these loops is bounded by
   `SweepPlanLib.MAX_ACTIONS = 50` (enforced by `validatePlanShape`, called at the top
-  of `executeSweep` before any of these loops run) or, for the Pancake path loop, by
+  of `executeSweep` before any of these loops run) or, for the Pancake path loops, by
   the path length a single swap action's `routeData` encodes (itself bounded by the
   overall 50-action plan and gas-limited in practice). This is inherent to the
   sweep-execution feature itself — the whole point is to touch N user-specified
@@ -134,7 +155,7 @@ inside its path loop.
 - **Action:** none beyond the existing `MAX_ACTIONS` bound; cross-referenced in
   `gas-report.md`.
 
-### 16-18. `timestamp` (3 instances)
+### 18-20. `timestamp` (3 instances)
 
 `UniswapV3Adapter`/`PancakeV2Adapter`'s `if (block.timestamp > deadline) revert
 RouteExpired()`, and `SweepExecutor`'s `if (block.timestamp > plan.deadline) revert
@@ -148,7 +169,7 @@ PlanExpired()`.
   single-block-precision.
 - **Action:** none. Accepted, matches PRD-mandated deadline semantics.
 
-### 19-20. `operator-fee-outlier` (2 instances) — `SweepExecutor.executeSweep`, `DemoDistributor` constructor
+### 21-22. `operator-fee-outlier` (2 instances) — `SweepExecutor.executeSweep`, `DemoDistributor` constructor
 
 - **Detector claim:** "Arsia operator fee component likely >25% of total cost" for
   functions with loops + state writes.

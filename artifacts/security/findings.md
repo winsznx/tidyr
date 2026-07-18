@@ -137,13 +137,14 @@ constructor_rejectsZeroOwner` updated to assert the actual observed error
 Full individual triage for all six (plus all 31 Low/Informational findings) is in
 `artifacts/security/slither-triage.md`, not duplicated here. Summary:
 
-| ID    | Detector                     | Disposition                                                                                                               |
-| ----- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| F7-08 | `arbitrary-send-eth`         | False positive - `plan.recipient` is signature-bound, not attacker-arbitrary                                              |
-| F7-09 | `reentrancy-balance`         | Mitigated by `ReentrancyGuard`, directly tested                                                                           |
-| F7-10 | `proxy-storage-collision`    | False positive - no delegatecall/proxy pattern exists (verified by grep)                                                  |
-| F7-11 | `amm-spot-oracle-dependency` | False positive - flagged function reads zero AMM reserves/prices (verified by direct code reading)                        |
-| F7-12 | `unused-return` (×2)         | Intentional and documented at the point of definition (balance-delta accounting, not trusting reported reserve timestamp) |
+| ID    | Detector                                          | Disposition                                                                                                              |
+| ----- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| F7-08 | `arbitrary-send-eth`                              | False positive - `plan.recipient` is signature-bound, not attacker-arbitrary                                             |
+| F7-09 | `reentrancy-balance`                              | Mitigated by `ReentrancyGuard`, directly tested                                                                          |
+| F7-10 | `proxy-storage-collision`                         | False positive - no delegatecall/proxy pattern exists (verified by grep)                                                 |
+| F7-11 | `amm-spot-oracle-dependency`                      | False positive - flagged function reads zero AMM reserves/prices (verified by direct code reading)                       |
+| F7-12 | `unused-return` (`PancakeV2Adapter._getReserves`) | Intentional - reserve timestamp unused, matches Uniswap's own router pattern                                             |
+| F7-13 | `unused-return` (`SweepExecutor._executeSwap`)    | Intentional and documented at the point of definition - balance-delta accounting never trusts the adapter's return value |
 
 ---
 
