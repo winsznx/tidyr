@@ -16,9 +16,7 @@ export const metadata: Metadata = {
   description:
     "Scan every Monad wallet, choose what stays, sell or consolidate what does not, and understand every transaction before you sign.",
   applicationName: "TIDYR",
-  icons: {
-    icon: "/icon",
-  },
+  manifest: "/manifest.webmanifest",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
