@@ -20,4 +20,14 @@ export const monadMainnet = defineChain({
   blockExplorers: {
     default: { name: "MonadScan", url: "https://monadscan.com" },
   },
+  contracts: {
+    // Canonical Multicall3, verified deployed on Monad mainnet (real
+    // bytecode confirmed live, and in Phase 7's MonadMainnetTopology fork
+    // test). Without this, viem's publicClient.multicall() throws
+    // "chain not configured for multicall3" - the exact cause of the
+    // "Could not read token balances" error in useTokenInventory.
+    multicall3: {
+      address: "0xcA11bde05977b3631167028862bE2a173976CA11",
+    },
+  },
 });
