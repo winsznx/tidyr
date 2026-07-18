@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 
 import { Wordmark } from "@/components/brand/wordmark";
+import { StagingNotice } from "@/components/workspace/staging-notice";
 import { cn } from "@/lib/cn";
 
 const RAIL_LINKS = [
@@ -59,6 +60,7 @@ export function AppShell({
       </nav>
 
       <div className="flex min-w-0 flex-1 flex-col">
+        <StagingNotice />
         <main className="flex-1 p-4 sm:p-8">{children}</main>
         {footer ? (
           <div className="sticky bottom-0 border-t border-(--color-border) bg-(--color-canvas) p-4">
