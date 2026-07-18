@@ -2,26 +2,27 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { AddressText } from "@/components/ui/address";
 import { Section } from "@/components/layout/section";
+import { MAINNET_DEPLOYMENT } from "@/lib/deployment";
 
 const ILLUSTRATIVE_ROWS = [
   {
     wallet: "Dev Wallet 1",
     token: "DUST1",
-    address: "0x1234000000000000000000000000000000abcd",
+    address: MAINNET_DEPLOYMENT.addresses.dust1,
     balance: "200.0",
     action: "Sell → MON",
   },
   {
     wallet: "Airdrop Wallet",
     token: "DUST3",
-    address: "0x1B7EB110BDc1D0b7F85046EC812Be77958E8b3c3",
+    address: MAINNET_DEPLOYMENT.addresses.dust3,
     balance: "1,000.0",
     action: "Sell → USDC",
   },
   {
     wallet: "Hackathon Wallet",
     token: "DUST5",
-    address: "0xB9b200e7b56B6180e87c7F927a040647D8529E2F",
+    address: MAINNET_DEPLOYMENT.addresses.dust5,
     balance: "50.0",
     action: "Consolidate",
   },

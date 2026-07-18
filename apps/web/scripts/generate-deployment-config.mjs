@@ -29,6 +29,13 @@ export const MAINNET_DEPLOYMENT = ${JSON.stringify(
     dependencies: mainnet.dependencies,
     outputTokensAllowed: mainnet.outputTokensAllowed,
     sourceVerification: sourceVerificationByContract,
+    configurationFrozen: mainnet.phase10?.freeze?.configurationFrozenFinal ?? false,
+    phase10Pool: mainnet.phase10?.dust3WmonPool
+      ? {
+          address: mainnet.phase10.dust3WmonPool.address,
+          fee: mainnet.phase10.dust3WmonPool.fee,
+        }
+      : null,
   },
   null,
   2,

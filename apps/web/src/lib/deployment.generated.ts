@@ -67,4 +67,9 @@ export const MAINNET_DEPLOYMENT = {
       url: "https://monadscan.com/address/0x49552a355ccb700e8ab18e392f1b05f0005c2d9e",
     },
   },
+  configurationFrozen: true,
+  phase10Pool: {
+    address: "0x78dDb77b9B9A821042A79AC77d7EF2726978eE83",
+    fee: 3000,
+  },
 } as const;
