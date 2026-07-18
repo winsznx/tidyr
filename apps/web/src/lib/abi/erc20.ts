@@ -56,6 +56,25 @@ export const erc20Abi = [
   },
 ] as const;
 
+/**
+ * Copied verbatim from the forge build artifact
+ * packages/contracts/out/IERC20.sol/IERC20.json. Used by F14's report
+ * reconstruction to decode real `Transfer` logs found in a settled sweep's
+ * transaction receipt — never emitted or written by this app.
+ */
+export const transferEventAbi = [
+  {
+    type: "event",
+    name: "Transfer",
+    anonymous: false,
+    inputs: [
+      { name: "from", type: "address", indexed: true, internalType: "address" },
+      { name: "to", type: "address", indexed: true, internalType: "address" },
+      { name: "value", type: "uint256", indexed: false, internalType: "uint256" },
+    ],
+  },
+] as const;
+
 export const burnableAbi = [
   {
     type: "function",

@@ -97,4 +97,28 @@ export const sweepExecutorAbi = [
     ],
     outputs: [{ name: "executionPlanHash", type: "bytes32", internalType: "bytes32" }],
   },
+  /**
+   * Copied verbatim from the forge build artifact
+   * packages/contracts/out/SweepExecutor.sol/SweepExecutor.json — field
+   * names (`successfulActions`/`failedActions`, not `successCount`/
+   * `failCount`) and indexed-ness are exactly as declared on
+   * `SweepExecutor.sol`. Used by F14's report reconstruction to decode a
+   * completed sweep's real on-chain outcome; this app only ever reads this
+   * event, never emits it.
+   */
+  {
+    type: "event",
+    name: "SweepCompleted",
+    anonymous: false,
+    inputs: [
+      { name: "executionPlanHash", type: "bytes32", indexed: true, internalType: "bytes32" },
+      { name: "displayManifestHash", type: "bytes32", indexed: true, internalType: "bytes32" },
+      { name: "owner", type: "address", indexed: true, internalType: "address" },
+      { name: "recipient", type: "address", indexed: false, internalType: "address" },
+      { name: "outputToken", type: "address", indexed: false, internalType: "address" },
+      { name: "outputAmount", type: "uint256", indexed: false, internalType: "uint256" },
+      { name: "successfulActions", type: "uint256", indexed: false, internalType: "uint256" },
+      { name: "failedActions", type: "uint256", indexed: false, internalType: "uint256" },
+    ],
+  },
 ] as const;

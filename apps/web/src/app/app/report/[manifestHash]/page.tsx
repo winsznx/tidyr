@@ -1,4 +1,4 @@
-import { EmptyState } from "@/components/ui/empty-state";
+import { SweepReportView } from "./report-view";
 
 export default async function ReportPage({
   params,
@@ -7,10 +7,5 @@ export default async function ReportPage({
 }) {
   const { manifestHash } = await params;
 
-  return (
-    <EmptyState
-      title={`Report for ${manifestHash}`}
-      description="Finalized reports are rebuilt from indexed SweepCompleted/Transfer events, never from local success state. Report rendering ships in the same pass as the execution monitor."
-    />
-  );
+  return <SweepReportView manifestHash={manifestHash} />;
 }

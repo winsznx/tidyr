@@ -14,6 +14,7 @@ import { useSweepReview } from "@/lib/review/use-sweep-review";
 import { usePlanSignature } from "@/lib/review/use-plan-signature";
 import { usePlanExecution, type PlanExecutionStatus } from "@/lib/review/use-plan-execution";
 import { usePlanStore } from "@/store/plan";
+import { useExecutionStore } from "@/store/executions";
 import { useSignatureStore } from "@/store/signatures";
 import { useWalletStore } from "@/store/wallets";
 
@@ -71,6 +72,7 @@ function ExecutionPanel({
 }) {
   const existingSignature = useSignatureStore((s) => s.signatures[review.wallet]);
   const clearSignature = useSignatureStore((s) => s.clearSignature);
+  const setExecution = useExecutionStore((s) => s.setExecution);
   const {
     status,
     connectedAddress,
@@ -83,6 +85,7 @@ function ExecutionPanel({
   } = usePlanExecution(review.plan, existingSignature?.signature ?? null);
 
   const autoSimulatedFor = useRef<string | null>(null);
+  const recordedFor = useRef<string | null>(null);
 
   useEffect(() => {
     if (!existingSignature) return;
@@ -97,6 +100,27 @@ function ExecutionPanel({
     clearSignature(review.wallet);
     refetchReview();
   }, [status, clearSignature, refetchReview, review.wallet]);
+
+  useEffect(() => {
+    if (status !== "success") return;
+    if (!txHash || !review.displayManifestHash || !review.executionPlanHash) return;
+    if (recordedFor.current === txHash) return;
+    recordedFor.current = txHash;
+    setExecution({
+      displayManifestHash: review.displayManifestHash,
+      executionPlanHash: review.executionPlanHash,
+      wallet: review.wallet,
+      txHash,
+      submittedAt: Date.now(),
+    });
+  }, [
+    status,
+    txHash,
+    review.displayManifestHash,
+    review.executionPlanHash,
+    review.wallet,
+    setExecution,
+  ]);
 
   if (!existingSignature) return null;
 
