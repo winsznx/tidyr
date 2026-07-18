@@ -69,7 +69,11 @@ contract Phase10RouteSimulation is Script {
         vm.startBroadcast(deployerKey);
 
         // --- Wrap a small amount of real MON into WMON for the demo pool ---
-        uint256 wmonForPool = 20 ether; // ~0.43 USDC notional at current live price
+        // Sized per artifacts/phase-10/liquidity-sizing.md's recommendation: 5 MON
+        // sustains ~24 sequential 200-DUST3 demo sweeps before 5% cumulative price
+        // drift, at negligible (~0.2%) single-swap impact, while retaining ~88% of
+        // the deployer's MON balance.
+        uint256 wmonForPool = 5 ether;
         IWMON(WMON).deposit{value: wmonForPool}();
 
         // --- Create + initialize the DUST3/WMON pool (token0/token1 sorted) ---
@@ -85,7 +89,7 @@ contract Phase10RouteSimulation is Script {
         }
 
         // --- Mint a wide-range liquidity position ---
-        uint256 dust3ForPool = 200_000 ether; // matches the 0.0001 WMON/DUST3 price at this depth
+        uint256 dust3ForPool = 50_000 ether; // matches the 0.0001 WMON/DUST3 price at 5 WMON depth
         IERC20(DUST3).approve(NFPM, dust3ForPool);
         IERC20(WMON).approve(NFPM, wmonForPool);
 
@@ -121,10 +125,15 @@ contract Phase10RouteSimulation is Script {
 
     function _simulateSweep(uint256 deployerKey) internal {
         SweepExecutor executor = SweepExecutor(payable(SWEEP_EXECUTOR));
-        uint256 swapAmount = 10_000 ether; // small slice of deployer's real DUST3 balance
+        // One full DemoDistributor claim (DemoDistributor.CLAIM_AMOUNT) - the
+        // smallest amount that still represents a realistic demo user's sweep,
+        // per artifacts/phase-10/smoke-plan.json's candidate comparison.
+        uint256 swapAmount = 200 ether;
 
         vm.startBroadcast(deployerKey);
-        IERC20(DUST3).approve(PERMIT2, type(uint256).max);
+        // Exact amount only - never an unlimited approval, even though Permit2's
+        // own signed-amount model would make a max approval equally safe.
+        IERC20(DUST3).approve(PERMIT2, swapAmount);
         vm.stopBroadcast();
 
         bytes memory path = abi.encodePacked(DUST3, DUST3_WMON_FEE, WMON, WMON_USDC_FEE, USDC);
@@ -134,7 +143,15 @@ contract Phase10RouteSimulation is Script {
             tokenIn: DUST3,
             amountIn: swapAmount,
             adapterKind: SweepPlanLib.AdapterKind.UNISWAP_V3,
-            minAmountOut: 1,
+            // 426 raw USDC units expected (modeled first leg + fresh live-quoted
+            // second leg, see artifacts/phase-10/revised-smoke-plan.json) less a
+            // tightened 2% slippage tolerance (Phase 10.1 economics review -
+            // measured total degradation was 0.721%, and the first leg is fully
+            // deterministic since we mint the pool ourselves in the same review
+            // cycle; 2% comfortably covers real WMON/USDC market drift between
+            // quote and broadcast without the excess 10% slack of the original
+            // packet).
+            minAmountOut: 417,
             routeData: path,
             allowFailure: false
         });

@@ -124,5 +124,92 @@
       "status": "success"
     }
   ],
-  "timestamp": 1784371859
+  "timestamp": 1784371859,
+  "phase10": {
+    "status": "engineering smoke test broadcast and verified on real Monad mainnet - not yet approved as final consumer-demo economics (see artifacts/phase-10/economics-review.md and artifacts/phase-10/demo-options.md)",
+    "dust3WmonPool": {
+      "address": "0x78dDb77b9B9A821042A79AC77d7EF2726978eE83",
+      "token0": "0x1B7EB110BDc1D0b7F85046EC812Be77958E8b3c3",
+      "token1": "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
+      "fee": 3000,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "792281625142643392428113920",
+      "initialTick": -92109,
+      "initialPriceNote": "1 WMON = 10,000 DUST3 (1 DUST3 = 0.0001 WMON) - an arbitrary demo ratio, not a real market price",
+      "createPoolTransaction": "0x229244ba22225c01114436194c099a60f128fb831e6a86df2438e2cf43246b12",
+      "createPoolBlockNumber": 88605154,
+      "createPoolGasUsed": 5400000,
+      "initializeTransaction": "0xa4a3e20092589850a6968690506f1286f140790c9e6078073f25fffd44b09ebe",
+      "initializeBlockNumber": 88606515,
+      "initializeGasUsed": 100000
+    },
+    "wmonDeposit": {
+      "transaction": "0xf423a4b49b037b5b82defba04c7bf03648c5ccf3d81cecf4c6fcacd073e63490",
+      "blockNumber": 88602315,
+      "gasUsed": 65000,
+      "amountWrapped": "5000000000000000000"
+    },
+    "liquidityPosition": {
+      "tokenId": 44076,
+      "tickLower": -98160,
+      "tickUpper": -86160,
+      "liquidity": "1915019841751920881690",
+      "dust3Deposited": "49262435587280338882168",
+      "wmonDeposited": "5000000000000000000",
+      "approveDust3Transaction": "0xc7393cd7f953d54840f92308324ba8d198ffa1e31531739ee4e40b52c31aec52",
+      "approveDust3BlockNumber": 88606748,
+      "approveDust3GasUsed": 65000,
+      "approveWmonTransaction": "0x6eee0ddc2a84b4bda26a60f8346b688cc3dd57d35722e397492e64e35e2e5a9c",
+      "approveWmonBlockNumber": 88606911,
+      "approveWmonGasUsed": 65000,
+      "mintTransaction": "0x7f7177abcc95c60a7b137a6d2cff9af043aec4226558fa6646a956ba319d3c8e",
+      "mintBlockNumber": 88607309,
+      "mintGasUsed": 1050000
+    },
+    "smokeSweep": {
+      "purpose": "engineering smoke test only - proves Permit2, exactInput multihop, deployed adapters, DUST3->WMON->USDC route, nonce behavior, zero retained executor/adapter balances. Output value is not a meaningful consumer-facing amount (423 raw USDC units = $0.000423).",
+      "approvePermit2Transaction": "0x71fc6f57b952160377c0abde1b4b582935d270e435b645f78015624ad989baf0",
+      "approvePermit2BlockNumber": 88607767,
+      "approvePermit2GasUsed": 65000,
+      "approvePermit2Amount": "200000000000000000000",
+      "transaction": "0xc2396b545c1b7fa9a068c42fbcebfaaf0f87203365cc4e87a6ca21301fbd4363",
+      "blockNumber": 88608592,
+      "gasUsed": 950000,
+      "status": "success",
+      "route": "DUST3 -> (fee 3000) -> WMON -> (fee 3000) -> USDC, AdapterKind.UNISWAP_V3",
+      "amountIn": "200000000000000000000",
+      "quotedAmountOut": "423",
+      "minAmountOut": "414",
+      "actualAmountOut": "423",
+      "slippageTolerancePct": 2,
+      "executionPlanHash": "0xd18ff03ae8d3e28c3636050364bef91ef9cb76a60c79221210c1a86b3eaafeaa",
+      "displayManifestHash": "0xfc96ef59ebb222efb8863dfb1eaf4efd2d2697bebbec8b09e4b2e66cf79b2758",
+      "permit2Nonce": 0,
+      "executorNonceConsumed": 0,
+      "executorNonceAfter": 1,
+      "finalDeployerUsdcBalance": "423",
+      "executorBalancesAfter": { "dust3": "0", "wmon": "0", "usdc": "0" },
+      "adapterBalancesAfter": { "dust3": "0", "wmon": "0", "usdc": "0" }
+    },
+    "totalGasUsed": 7760000,
+    "totalCostAt102GweiMon": "0.79152",
+    "freeze": {
+      "status": "complete - all three contracts frozen and independently verified on real Monad mainnet",
+      "pancakeV2AdapterFreezeTransaction": "0xa812372ff9cb9220fa3f4c9876b16c7c441370772aaab51f6a527c58f2281d27",
+      "pancakeV2AdapterFreezeBlockNumber": 88614826,
+      "pancakeV2AdapterFreezeGasUsed": 75000,
+      "uniswapV3AdapterFreezeTransaction": "0x3dd1e8aa9b12510aa6b1a82b6aa74099524d52db952fed99710c16868fe5efdc",
+      "uniswapV3AdapterFreezeBlockNumber": 88618447,
+      "uniswapV3AdapterFreezeGasUsed": 75000,
+      "sweepExecutorFreezeTransaction": "0x68317c9292361bf8fbfc9441b9284f4e801e42447b4685e058924f34f0b6b6b6",
+      "sweepExecutorFreezeBlockNumber": 88618636,
+      "sweepExecutorFreezeGasUsed": 125000,
+      "configurationFrozenFinal": true,
+      "finalOutputTokenSet": [
+        "MON_NATIVE_SENTINEL (0xEeee...EEeE)",
+        "USDC (0x754704Bc059F8C67012fEd69BC8A327a5aafb603)"
+      ],
+      "postFreezeMutationVerified": "registerOutputToken and allowIntermediateAsset both confirmed reverting with ConfigurationIsFrozen() after freeze"
+    }
+  }
 }

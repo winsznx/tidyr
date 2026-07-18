@@ -1,0 +1,127 @@
+{
+  "network": "Monad mainnet",
+  "chainId": 143,
+  "source": "packages/contracts/script/Phase10RouteSimulation.s.sol, executed against anvil --fork-url https://rpc.monad.xyz (local fork only, never broadcast to real mainnet)",
+  "readAtBlock": 88590779,
+  "candidateComparison": {
+    "note": "Smallest amount that still demonstrates the complete route clearly, per the four required candidates.",
+    "candidates": [
+      {
+        "label": "one-quarter of a DemoDistributor claim",
+        "dust3AmountIn": "50000000000000000000",
+        "dust3AmountInHuman": "50",
+        "assessment": "Demonstrates the route but yields a barely-visible output; not representative of a real demo user's action."
+      },
+      {
+        "label": "one-half of a DemoDistributor claim",
+        "dust3AmountIn": "100000000000000000000",
+        "dust3AmountInHuman": "100",
+        "assessment": "Same limitation as one-quarter, smaller margin of realism."
+      },
+      {
+        "label": "one full DemoDistributor claim (SELECTED)",
+        "dust3AmountIn": "200000000000000000000",
+        "dust3AmountInHuman": "200",
+        "assessment": "Matches exactly what a real demo user receives from claimDemoBundle() and would plausibly sweep. Negligible price impact (0.208% at the recommended 5 MON pool size) on this route. Selected as the smoke amount."
+      },
+      {
+        "label": "previously-tested amount from the earlier fork validation",
+        "dust3AmountIn": "10000000000000000000000",
+        "dust3AmountInHuman": "10000",
+        "assessment": "50x a real claim - not representative of real demo usage and causes needless price impact (5-23% depending on pool size) on a correctly-sized small demo pool. Rejected for the smoke test; useful only as an earlier stress-test data point."
+      }
+    ],
+    "selected": "200 DUST3 (one full DemoDistributor claim)"
+  },
+  "route": {
+    "adapterKind": 1,
+    "adapterKindName": "UNISWAP_V3",
+    "pathTokens": [
+      "0x1B7EB110BDc1D0b7F85046EC812Be77958E8b3c3",
+      "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
+      "0x754704Bc059F8C67012fEd69BC8A327a5aafb603"
+    ],
+    "pathTokenSymbols": ["DUST3", "WMON", "USDC"],
+    "pathFees": [3000, 3000],
+    "pathBytesDecoded": "DUST3 (20 bytes) || fee 3000 (3 bytes, 0x000bb8) || WMON (20 bytes) || fee 3000 (3 bytes, 0x000bb8) || USDC (20 bytes)",
+    "firstLegSource": "modeled - DUST3/WMON pool does not exist yet on real mainnet as of this packet; modeled with the exact Uniswap V3 in-range constant-sum formula against the proposed 5 MON / 50,000 DUST3 liquidity position",
+    "secondLegSource": "live QuoterV2.quoteExactInputSingle staticcall against the real, existing WMON/USDC 0.3% pool (0x659bD0BC4167BA25c62E05656F78043E7eD4a9da)"
+  },
+  "amounts": {
+    "amountIn": "200000000000000000000",
+    "amountInHuman": "200 DUST3",
+    "modeledFirstLegOutput": "19919000000000000",
+    "modeledFirstLegOutputHuman": "0.019919 WMON",
+    "modeledFirstLegPriceImpactPct": 0.208,
+    "liveQuotedSecondLegOutput": "427",
+    "liveQuotedSecondLegOutputHuman": "0.000427 USDC",
+    "totalExpectedOutput": "427",
+    "totalExpectedOutputHuman": "0.000427 USDC",
+    "slippageTolerancePct": 10,
+    "minAmountOut": "384",
+    "minAmountOutRationale": "10% below the expected 427 raw USDC units, conservative because the first leg is modeled (pool does not exist yet) rather than live-quoted end-to-end."
+  },
+  "planFields": {
+    "owner": "0xbde0076F05B5eA898F9ca51f1b595D84598DE586",
+    "recipient": "0xbde0076F05B5eA898F9ca51f1b595D84598DE586",
+    "outputToken": "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
+    "outputTokenSymbol": "USDC",
+    "deadlineNote": "Set to a short window (e.g. 10-15 minutes) immediately before real signing - the 7200s value used in the fork-only rehearsal is for review convenience only and is never reused as-is at broadcast time.",
+    "executionNonce": 0,
+    "executionNonceSource": "live cast call SweepExecutor.nonces(deployer) on real mainnet - confirmed 0, never used before",
+    "displayManifestHash": "keccak256(\"phase10-route-simulation\") in the rehearsal script; the real broadcast must hash the real RFC 8785 canonical manifest JSON via packages/transaction-review, not this placeholder string"
+  },
+  "permit2": {
+    "spender": "0x7a844005998e896967A8b2BdA13c7826F387E9c3",
+    "permittedToken": "0x1B7EB110BDc1D0b7F85046EC812Be77958E8b3c3",
+    "permittedAmount": "200000000000000000000",
+    "permittedAmountHuman": "exactly 200 DUST3 - not unlimited",
+    "erc20AllowanceToPermit2": "200000000000000000000 (exact, not max) - see step G in the confirmation packet",
+    "witnessTypeString": "TidyrWitness witness)TidyrWitness(bytes32 executionPlanHash)TokenPermissions(address token,uint256 amount)",
+    "signatureGeneration": "Generated fresh immediately before broadcast (vm.sign in a script, or the connected wallet's signTypedData in the real app) - never reused from this rehearsal, since deadline/nonce must be current at signing time. Construction proven byte-correct by packages/contracts/test/Phase10RouteSmoke.fork.t.sol::test_dust3ToUsdcMultihopRouteSucceeds, which computes and consumes this exact structure end-to-end on a live-state fork."
+  },
+  "rehearsalResult": {
+    "description": "Real, successful local-fork rehearsal at the exact recommended configuration (5 MON pool, 50,000 DUST3 liquidity, 200 DUST3 smoke swap). No transaction here was sent to real mainnet.",
+    "executionPlanHash": "0x64ca4111ec9698605a1eca47af8beee752137e2ec7a4be77bc811c2217d3ae14",
+    "dust3Spent": "200000000000000000000",
+    "usdcReceived": "427",
+    "executorUsdcBalanceAfter": "0",
+    "executorDust3BalanceAfter": "0",
+    "poolCreated": "0x78dDb77b9B9A821042A79AC77d7EF2726978eE83",
+    "positionLiquidity": "1915019841751920881690",
+    "dust3ActuallyUsedInMint": "49262435587280338882168",
+    "wmonActuallyUsedInMint": "5000000000000000000"
+  },
+  "failureSafetyChecks": {
+    "expiredDeadline": {
+      "status": "verified on fork",
+      "test": "packages/contracts/test/Phase10RouteSmoke.fork.t.sol::test_expiredDeadlineReverts",
+      "result": "reverts, nonce not consumed"
+    },
+    "excessiveMinAmountOut": {
+      "status": "verified on fork",
+      "test": "packages/contracts/test/Phase10RouteSmoke.fork.t.sol::test_excessiveMinAmountOutReverts",
+      "result": "reverts, nonce not consumed"
+    },
+    "wrongAdapterKindSubstitution": {
+      "status": "verified in the general Phase 7 suite (structural property, applies to any plan)",
+      "test": "packages/contracts/test/SweepExecutorAdversarial.t.sol::test_signedAdapterKind_cannotBeSubstitutedAtExecution"
+    },
+    "changedRecipientOrAmountOrRouteOrToken": {
+      "status": "verified in the general Phase 7 suite (Permit2 witness binds the full plan hash, so any field change invalidates the signature)",
+      "test": "packages/contracts/test/Permit2Witness.t.sol::test_modifiedPlan_fails"
+    },
+    "replayedNonce": {
+      "status": "verified in the general Phase 7 suite",
+      "test": "packages/contracts/test/Permit2Witness.t.sol::test_reusedNonce_fails"
+    },
+    "executorRetainsNoFundsOnSuccess": {
+      "status": "verified on fork for this exact route",
+      "evidence": "rehearsalResult.executorUsdcBalanceAfter == 0 && executorDust3BalanceAfter == 0"
+    },
+    "revertedExecutionLeavesNoTrace": {
+      "status": "verified in the general Phase 7 suite",
+      "test": "packages/contracts/test/SweepExecutorAdversarial.t.sol::test_maliciousAdapter_revertsAfterPartialMutation_leavesNoTrace"
+    }
+  }
+}
