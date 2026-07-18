@@ -1024,3 +1024,36 @@ deployer address (no separate protocol-owner transfer requested this run).
 
 `forge test`: 152/152 unaffected (no contract source code changed this phase, only
 deployment tooling and its config).
+
+---
+
+## Post-Deployment Admin Action: `registerOutputToken(USDC)`
+
+**Trigger:** Phase 10 needs a USDC sweep path (DUST3), and the deployed
+`SweepExecutor` only allows native MON output by default. The user asked for a
+specific, auditable procedure before broadcasting: read the ABI, check
+`configurationFrozen`/existing allowance, simulate, show the exact target/calldata/
+gas/expected state change, get explicit confirmation, then broadcast and read the
+state back.
+
+**Executed exactly that sequence:**
+
+1. Read the deployed ABI from the compiled artifact — confirmed
+   `registerOutputToken(address)` exists as documented.
+2. `configurationFrozen()` → `false`.
+3. `allowedOutputTokens(USDC)` → `false` (not already registered).
+4. Confirmed `owner() == deployer` (the caller can actually execute this).
+5. Simulated via `cast call` (staticcall, no broadcast) — succeeded, no revert.
+   `cast estimate` → 68,338 gas at the network's then-current 102 gwei ≈ 0.00697 MON.
+6. Presented target (`0x7a844005998e896967A8b2BdA13c7826F387E9c3`), calldata
+   (`0x8a85b4f5...5aafb603`), gas estimate, and expected state change
+   (`allowedOutputTokens(USDC)` `false → true`, `OutputTokenAllowed` event) — user
+   explicitly confirmed before broadcasting.
+7. Broadcast via `cast send`. `status: 1 (success)`, `gasUsed: 68338` (exact match to
+   the estimate), tx `0x281f22028becdfb57004dbf77b58318ce50f1b0a987189f147714b610cfc7b57`.
+8. Read `allowedOutputTokens(USDC)` back — confirmed `true`.
+9. Recorded the full action (calldata, preconditions checked, gas, tx hash, block
+   number, before/after state) in `deployments/mainnet.json`'s new
+   `postDeploymentAdminActions` array.
+
+`SweepExecutor` now allows both native MON and USDC as sweep output tokens.

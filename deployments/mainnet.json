@@ -97,7 +97,32 @@
     "perTokenAmount": "400000000000000000000000",
     "note": "400,000 of each of the 5 demo tokens transferred to DemoDistributor at deployment time (200 ether/claim x plenty of claims)"
   },
-  "outputTokensAllowed": ["MON_NATIVE_SENTINEL (0xEeee...EEeE)"],
-  "outputTokensNote": "SweepExecutor only allows native MON output by default (set in its constructor). Registering USDC or any other output token requires the owner to call registerOutputToken(address) separately - not yet done.",
+  "outputTokensAllowed": [
+    "MON_NATIVE_SENTINEL (0xEeee...EEeE)",
+    "USDC (0x754704Bc059F8C67012fEd69BC8A327a5aafb603)"
+  ],
+  "outputTokensNote": "SweepExecutor allows native MON (constructor-set) and USDC (registered post-deployment via registerOutputToken - see postDeploymentAdminActions).",
+  "postDeploymentAdminActions": [
+    {
+      "action": "registerOutputToken(USDC)",
+      "target": "sweepExecutor",
+      "calldata": "0x8a85b4f5000000000000000000000000754704bc059f8c67012fed69bc8a327a5aafb603",
+      "caller": "0xbde0076F05B5eA898F9ca51f1b595D84598DE586",
+      "preconditionsChecked": {
+        "configurationFrozen": false,
+        "allowedOutputTokensUsdcBefore": false,
+        "callerIsOwner": true,
+        "staticCallSimulation": "succeeded, no revert"
+      },
+      "gasEstimated": 68338,
+      "gasUsed": 68338,
+      "gasPriceWei": "102000000000",
+      "costMon": "0.006970476",
+      "transactionHash": "0x281f22028becdfb57004dbf77b58318ce50f1b0a987189f147714b610cfc7b57",
+      "blockNumber": 88549458,
+      "allowedOutputTokensUsdcAfter": true,
+      "status": "success"
+    }
+  ],
   "timestamp": 1784371859
 }
