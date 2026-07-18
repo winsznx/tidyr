@@ -25,6 +25,28 @@ export const pancakeV2FactoryAbi = [
   },
 ] as const;
 
+/** Minimal PancakeSwap V2 pair interface, used to read real reserves for quoting. */
+export const pancakeV2PairAbi = [
+  {
+    type: "function",
+    name: "getReserves",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "reserve0", type: "uint112" },
+      { name: "reserve1", type: "uint112" },
+      { name: "blockTimestampLast", type: "uint32" },
+    ],
+  },
+  {
+    type: "function",
+    name: "token0",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+] as const;
+
 export const uniswapV3QuoterV2Abi = [
   {
     type: "function",
