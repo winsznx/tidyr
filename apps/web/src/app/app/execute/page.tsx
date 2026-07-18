@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 import { Badge } from "@/components/ui/badge";
 import { AddressText } from "@/components/ui/address";
 import { Button } from "@/components/ui/button";
@@ -10,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { WalletReview } from "@/lib/review/use-sweep-review";
 import { useSweepReview } from "@/lib/review/use-sweep-review";
 import { usePlanSignature } from "@/lib/review/use-plan-signature";
+import { usePlanExecution, type PlanExecutionStatus } from "@/lib/review/use-plan-execution";
 import { usePlanStore } from "@/store/plan";
 import { useSignatureStore } from "@/store/signatures";
 import { useWalletStore } from "@/store/wallets";
@@ -46,7 +49,145 @@ function blockingReason(review: WalletReview): string | null {
   return null;
 }
 
-function SigningRow({ review, label }: { review: WalletReview; label: string }) {
+const EXECUTION_STATUS_BADGE: Record<
+  PlanExecutionStatus,
+  { tone: "neutral" | "accent" | "success" | "warning" | "danger"; label: string }
+> = {
+  idle: { tone: "neutral", label: "Not simulated" },
+  simulating: { tone: "warning", label: "Simulating…" },
+  simulated: { tone: "success", label: "Simulation OK" },
+  broadcasting: { tone: "warning", label: "Broadcasting…" },
+  pending: { tone: "warning", label: "Pending" },
+  success: { tone: "success", label: "Executed" },
+  failed: { tone: "danger", label: "Failed" },
+};
+
+function ExecutionPanel({
+  review,
+  refetchReview,
+}: {
+  review: WalletReview;
+  refetchReview: () => void;
+}) {
+  const existingSignature = useSignatureStore((s) => s.signatures[review.wallet]);
+  const clearSignature = useSignatureStore((s) => s.clearSignature);
+  const {
+    status,
+    connectedAddress,
+    ownerMismatch,
+    simulatedExecutionPlanHash,
+    errorMessage,
+    txHash,
+    simulate,
+    execute,
+  } = usePlanExecution(review.plan, existingSignature?.signature ?? null);
+
+  const autoSimulatedFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!existingSignature) return;
+    if (ownerMismatch) return;
+    if (autoSimulatedFor.current === existingSignature.signature) return;
+    autoSimulatedFor.current = existingSignature.signature;
+    void simulate();
+  }, [existingSignature, ownerMismatch, simulate]);
+
+  useEffect(() => {
+    if (status !== "success") return;
+    clearSignature(review.wallet);
+    refetchReview();
+  }, [status, clearSignature, refetchReview, review.wallet]);
+
+  if (!existingSignature) return null;
+
+  const badge = EXECUTION_STATUS_BADGE[status];
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-(--color-border) pt-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-(--color-heading)">Execution</span>
+        <Badge tone={badge.tone}>{badge.label}</Badge>
+      </div>
+
+      {ownerMismatch ? (
+        <p className="text-sm text-(--color-body)">
+          <Badge tone="danger">Wallet mismatch</Badge>{" "}
+          <span className="ml-1">
+            Your wallet extension is connected as {connectedAddress}, but this plan belongs to{" "}
+            {review.wallet}. Switch accounts before simulating or broadcasting.
+          </span>
+        </p>
+      ) : null}
+
+      {status === "simulated" && simulatedExecutionPlanHash ? (
+        <p className="text-xs text-(--color-body)">
+          Simulation succeeded — decoded execution plan hash{" "}
+          <AddressText value={simulatedExecutionPlanHash} chars={8} />
+        </p>
+      ) : null}
+
+      {errorMessage ? <p className="text-sm text-[#8a1f1f]">{errorMessage}</p> : null}
+
+      {status === "pending" || status === "success" ? (
+        txHash ? (
+          <p className="text-xs text-(--color-body)">
+            <a
+              href={`https://monadscan.com/tx/${txHash}`}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-(--color-accent) underline"
+            >
+              View transaction on MonadScan
+            </a>
+          </p>
+        ) : null
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-3">
+        {status !== "simulated" && status !== "broadcasting" && status !== "pending" && status !== "success" ? (
+          <Button
+            variant="ghost"
+            size="md"
+            disabled={ownerMismatch || status === "simulating"}
+            onClick={() => void simulate()}
+          >
+            {status === "simulating" ? "Simulating…" : "Simulate"}
+          </Button>
+        ) : null}
+
+        {status !== "success" ? (
+          <div className="flex flex-col gap-1">
+            <Button
+              variant="dark"
+              size="md"
+              disabled={status !== "simulated" || ownerMismatch}
+              onClick={() => void execute()}
+            >
+              {status === "broadcasting"
+                ? "Broadcasting…"
+                : status === "pending"
+                  ? "Awaiting confirmation…"
+                  : "Broadcast"}
+            </Button>
+            <p className="text-xs text-(--color-body)">
+              This broadcasts a real transaction that moves funds and cannot be undone.
+            </p>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function SigningRow({
+  review,
+  label,
+  refetchReview,
+}: {
+  review: WalletReview;
+  label: string;
+  refetchReview: () => void;
+}) {
   const existingSignature = useSignatureStore((s) => s.signatures[review.wallet]);
   const clearSignature = useSignatureStore((s) => s.clearSignature);
   const { connectedAddress, ownerMismatch, isPending, error, requestSignature } =
@@ -109,6 +250,7 @@ function SigningRow({ review, label }: { review: WalletReview; label: string }) 
               Clear / re-sign
             </Button>
           </div>
+          <ExecutionPanel review={review} refetchReview={refetchReview} />
         </div>
       ) : (
         <div>
@@ -159,13 +301,14 @@ export default function ExecutePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-2xl font-medium text-(--color-heading)">
-            Sign sweep plan
+            Sign &amp; execute sweep plan
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-(--color-body)">
             Signing authorizes SweepExecutor to pull exactly the tokens and amounts shown
-            below, for this plan only. No transaction is sent yet — execution happens in a
-            separate step. Each signature is a Permit2 EIP-712 message from your connected
-            wallet; it never broadcasts anything by itself.
+            below, for this plan only — a Permit2 EIP-712 message that never broadcasts
+            anything by itself. Once signed, a real read-only simulation runs against
+            SweepExecutor before the Broadcast button unlocks. Broadcasting sends a real,
+            irreversible transaction on Monad mainnet.
           </p>
         </div>
         <Button variant="ghost" onClick={() => refetch()} disabled={isFetching}>
@@ -199,6 +342,7 @@ export default function ExecutePage() {
                 key={review.wallet}
                 review={review}
                 label={wallet?.label ?? review.wallet}
+                refetchReview={() => void refetch()}
               />
             );
           })}
