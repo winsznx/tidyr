@@ -2,13 +2,19 @@ import { defineChain } from "viem";
 
 import { MAINNET_CHAIN_ID } from "./deployment";
 
-const rpcUrl = process.env["NEXT_PUBLIC_MONAD_RPC_URL"] ?? "https://rpc.monad.xyz";
+/**
+ * Requests go through /api/rpc (a same-origin server route) rather than
+ * directly to a provider URL. That route holds the real upstream RPC URL
+ * server-side only (see app/api/rpc/route.ts) - this keeps a paid/private
+ * RPC provider key (e.g. Alchemy) out of the browser bundle entirely,
+ * because a NEXT_PUBLIC_ env var would otherwise bake it into client JS
+ * where any visitor could read it via dev tools.
+ */
+const rpcUrl = "/api/rpc";
 
 /**
- * Monad mainnet chain definition. Chain ID and RPC verified in Phase 7's
- * MonadMainnetTopology.fork.t.sol. RPC URL is overridable via
- * NEXT_PUBLIC_MONAD_RPC_URL (public-safe - never point this at a URL with an
- * embedded private credential; proxy through a server route instead).
+ * Monad mainnet chain definition. Chain ID verified in Phase 7's
+ * MonadMainnetTopology.fork.t.sol.
  */
 export const monadMainnet = defineChain({
   id: MAINNET_CHAIN_ID,
