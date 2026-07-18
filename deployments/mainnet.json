@@ -1,3 +1,103 @@
 {
-  "note": "Placeholder. Populated by packages/contracts/script/Deploy.s.sol once Phase 9 (actual mainnet broadcast) runs. Phase 8 (this repository's current state) only validated this pipeline via a local Anvil fork and dry-run simulation against live Monad mainnet state - see docs/deployment-preflight.md - no real Monad mainnet deployment has occurred."
+  "network": "Monad mainnet",
+  "chainId": 143,
+  "deployedAt": "2026-07-18",
+  "deployer": "0xbde0076F05B5eA898F9ca51f1b595D84598DE586",
+  "owner": "0xbde0076F05B5eA898F9ca51f1b595D84598DE586",
+  "ownerNote": "PROTOCOL_OWNER_ADDRESS was left unset for this deployment, so Deploy.s.sol's `protocolOwner != deployer` guard skipped transferOwnership entirely - the deployer address is the permanent owner, not a pending transfer.",
+  "addresses": {
+    "sweepExecutor": "0x7a844005998e896967A8b2BdA13c7826F387E9c3",
+    "pancakeV2Adapter": "0xBB86D6ef057F03Ca0bcaB9f87B61894977B0dBcb",
+    "uniswapV3Adapter": "0xE80d042fBDC03Da8262ED0669c75a394d2437D27",
+    "dust1": "0x196f8a0d53fC71ccbc672D81b55754fA5B9438A5",
+    "dust2": "0x4825cb1FCb1D3bB39bFbE15F477115937D46D960",
+    "dust3": "0x1B7EB110BDc1D0b7F85046EC812Be77958E8b3c3",
+    "dust4": "0x645d6a93919362477Cf625Bd2Db9D802B27097E2",
+    "dust5": "0xB9b200e7b56B6180e87c7F927a040647D8529E2F",
+    "demoDistributor": "0x49552A355cCB700E8Ab18e392F1B05F0005C2d9E"
+  },
+  "dependencies": {
+    "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    "wmon": "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
+    "pancakeV2Factory": "0x02a84c1b3BBD7401a5f7fa98a384EBC70bB5749E",
+    "uniswapV3SwapRouter02": "0xfE31F71C1b106EAc32F1A19239c9a9A72ddfb900"
+  },
+  "deploymentTransactions": {
+    "sweepExecutor": "0xc95445330675dedb1191b2de2eefdd743969fd753dbd7780456bcaf45751fa4e",
+    "pancakeV2Adapter": "0xe6bf922a05efa16dac34d9594517895e63931aa3ab05f05d01fd8a9377ca87e9",
+    "uniswapV3Adapter": "0x838b0a5a0695f0fd3e09cdace8b3fc6d3ccd23132570b6ce43d480b8dcfcc7c7",
+    "dust1": "0x79d3bd466e3e27852b2b6a3c796b4992d7391f870e79ad468b75ba87da5ecb0b",
+    "dust2": "0xa05c42e3f68e7d0bd9d9b9282b16af0b1b4321d5d9652b5e32c568467ac66491",
+    "dust3": "0xec9f7769e0ee2930b006439b1f896b438273fadc0427d448228cf581de2d070f",
+    "dust4": "0x4bfc0e9c16a06947cb52d6f112f5a1f43c949ac7c20104ff9ea7ae30a0458ba4",
+    "dust5": "0xfb57f1c90c0b093630ff2a93392c581257c75162384c20c38f9bebe3184b479f",
+    "demoDistributor": "0xbe88a827b1f31a8af9ab120272f234d33a2dec7650c296b39c88f3aac9b3afed"
+  },
+  "sourceVerification": {
+    "provider": "MonadScan via Etherscan V2 multichain API (chainid=143)",
+    "sweepExecutor": {
+      "verified": true,
+      "url": "https://monadscan.com/address/0x7a844005998e896967a8b2bda13c7826f387e9c3"
+    },
+    "pancakeV2Adapter": {
+      "verified": true,
+      "url": "https://monadscan.com/address/0xbb86d6ef057f03ca0bcab9f87b61894977b0dbcb"
+    },
+    "uniswapV3Adapter": {
+      "verified": true,
+      "url": "https://monadscan.com/address/0xe80d042fbdc03da8262ed0669c75a394d2437d27"
+    },
+    "dust1": {
+      "verified": true,
+      "url": "https://monadscan.com/address/0x196f8a0d53fc71ccbc672d81b55754fa5b9438a5"
+    },
+    "dust2": {
+      "verified": true,
+      "url": "https://monadscan.com/address/0x4825cb1fcb1d3bb39bfbe15f477115937d46d960"
+    },
+    "dust3": {
+      "verified": true,
+      "url": "https://monadscan.com/address/0x1b7eb110bdc1d0b7f85046ec812be77958e8b3c3"
+    },
+    "dust4": {
+      "verified": true,
+      "url": "https://monadscan.com/address/0x645d6a93919362477cf625bd2db9d802b27097e2"
+    },
+    "dust5": {
+      "verified": true,
+      "url": "https://monadscan.com/address/0xb9b200e7b56b6180e87c7f927a040647d8529e2f"
+    },
+    "demoDistributor": {
+      "verified": true,
+      "url": "https://monadscan.com/address/0x49552a355ccb700e8ab18e392f1b05f0005c2d9e"
+    }
+  },
+  "identityGate": {
+    "check1_executorSlotsMatchThisRun": true,
+    "check2_nonzeroCode": true,
+    "check3_maskedRuntimeBytecodeComparison": {
+      "pancakeV2Adapter": {
+        "address": "0xBB86D6ef057F03Ca0bcaB9f87B61894977B0dBcb",
+        "match": true,
+        "reason": "runtime bytecode matches (immutable-argument bytes masked)"
+      },
+      "uniswapV3Adapter": {
+        "address": "0xE80d042fBDC03Da8262ED0669c75a394d2437D27",
+        "match": true,
+        "reason": "runtime bytecode matches (immutable-argument bytes masked)"
+      }
+    },
+    "check4_constructorArgumentsVerified": true,
+    "check5_dependencyAddressesVerified": true,
+    "check6_noProxyPatternDetected": true,
+    "check7_recordedInThisFile": true,
+    "check8_abortsOnMismatch": true
+  },
+  "demoDistributorInventory": {
+    "perTokenAmount": "400000000000000000000000",
+    "note": "400,000 of each of the 5 demo tokens transferred to DemoDistributor at deployment time (200 ether/claim x plenty of claims)"
+  },
+  "outputTokensAllowed": ["MON_NATIVE_SENTINEL (0xEeee...EEeE)"],
+  "outputTokensNote": "SweepExecutor only allows native MON output by default (set in its constructor). Registering USDC or any other output token requires the owner to call registerOutputToken(address) separately - not yet done.",
+  "timestamp": 1784371859
 }

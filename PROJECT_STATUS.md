@@ -946,3 +946,81 @@ immutableReferences` metadata to mask constructor-argument byte ranges before
 holds only a placeholder. Phase 9 (the actual broadcast) requires separate, explicit
 user approval plus a funded `DEPLOYER_PRIVATE_KEY` in a local `.env.deploy` file —
 neither exists in this session.
+
+---
+
+## Phase 9 — Mainnet Contract Deployment
+
+**Trigger:** the user filled in a real, funded `DEPLOYER_PRIVATE_KEY` in the local,
+gitignored `.env.deploy` (44.05 MON balance, well above the ~1.97 MON dry-run
+estimate) and explicitly confirmed proceeding with a real broadcast after reviewing
+the Phase 8 dry-run's output — the stop gate the whole prior phase was built around.
+
+**What happened:**
+
+1. Fixed a bug found in the process: `source .env.deploy` didn't export the
+   variables to the environment (no `export` keyword), so the deploy script's own
+   `vm.envAddress` calls failed with "environment variable not found." Added
+   `export` to every line in `.env.deploy`.
+2. Confirmed the deployer address (`0xbde0076F05B5eA898F9ca51f1b595D84598DE586`) and
+   its balance directly via `cast balance` before touching anything.
+3. Re-ran the Phase 8 dry-run against live Monad mainnet RPC (not a fork this time)
+   to confirm a clean pass immediately before the real run: preflight passed,
+   identity-verification gate passed, ~1.97 MON estimated.
+4. **Ran `forge script script/Deploy.s.sol --rpc-url "$MONAD_RPC_URL" --broadcast
+--verify`.** `ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.` All nine contracts
+   deployed to Monad mainnet.
+5. Source verification via `forge script`'s built-in `--verify` failed for the same
+   underlying reason as before, but never previously hit: the Etherscan V2
+   multichain API needs `chainid` in the verifier URL's query string itself, not
+   just via `--chain`. Fixed by re-running verification per-contract with
+   `forge verify-contract ... --verifier-url "https://api.etherscan.io/v2/api?chainid=143"`
+   — no re-deployment needed, verification is independent of the already-broadcast
+   transactions. All 9 contracts confirmed `Pass - Verified` via `forge verify-check`.
+6. Ran `scripts/verify-deployment-bytecode.mjs` against the real deployment (check 3
+   of the identity gate) — both adapters' live runtime bytecode matched the compiled
+   artifact (immutable bytes masked). All 8 gate checks now pass against a genuine
+   mainnet deployment, not a simulation.
+7. Sanity-checked on-chain state directly: `SweepExecutor.PANCAKE_V2_ADAPTER()`/
+   `UNISWAP_V3_ADAPTER()` match the deployed adapter addresses; `SweepExecutor.owner()`
+   is the deployer (since `PROTOCOL_OWNER_ADDRESS` was left unset, per the
+   `vm.envOr` default added in Phase 8); `DemoDistributor` holds 400,000 of each
+   demo token.
+8. Rewrote `deployments/mainnet.json` from a placeholder into the real deployment
+   record: addresses, deployer/owner, per-contract deployment transaction hashes,
+   source-verification URLs (all 9 contracts), the full identity-gate result, and
+   the demo-token inventory note.
+9. Updated `docs/requirements-traceability.md`'s Section 2 deployment rows from
+   `not-started` to `implemented (deployed to mainnet)` with real addresses.
+
+**Deployed addresses (Monad mainnet, chain 143):**
+
+| Contract         | Address                                      |
+| ---------------- | -------------------------------------------- |
+| SweepExecutor    | `0x7a844005998e896967A8b2BdA13c7826F387E9c3` |
+| PancakeV2Adapter | `0xBB86D6ef057F03Ca0bcaB9f87B61894977B0dBcb` |
+| UniswapV3Adapter | `0xE80d042fBDC03Da8262ED0669c75a394d2437D27` |
+| DUST1            | `0x196f8a0d53fC71ccbc672D81b55754fA5B9438A5` |
+| DUST2            | `0x4825cb1FCb1D3bB39bFbE15F477115937D46D960` |
+| DUST3            | `0x1B7EB110BDc1D0b7F85046EC812Be77958E8b3c3` |
+| DUST4 (burnable) | `0x645d6a93919362477Cf625Bd2Db9D802B27097E2` |
+| DUST5            | `0xB9b200e7b56B6180e87c7F927a040647D8529E2F` |
+| DemoDistributor  | `0x49552A355cCB700E8Ab18e392F1B05F0005C2d9E` |
+
+All 9 source-verified on MonadScan (URLs in `deployments/mainnet.json`'s
+`sourceVerification` section). Owner of every `Ownable2Step` contract is the
+deployer address (no separate protocol-owner transfer requested this run).
+
+**Not yet done (explicitly out of this deployment's scope):**
+
+- `SweepExecutor.registerOutputToken(USDC_ADDRESS)` — only native MON is an allowed
+  output token by default (constructor-set); USDC or any other output token needs
+  this owner-only call made separately.
+- Demo liquidity provisioning (real Pancake V2 pools) and buy/sell smoke tests —
+  Phase 10.
+- Removing `DEPLOYER_PRIVATE_KEY` from local use once no longer needed for
+  administration (PRD §19.19 step 30 is about Railway runtime services specifically,
+  which don't exist yet at this point in the build).
+
+`forge test`: 152/152 unaffected (no contract source code changed this phase, only
+deployment tooling and its config).
