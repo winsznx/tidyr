@@ -1,8 +1,14 @@
 # TIDYR Staging Deployment Report
 
-**Status: Staging preview deployed.** This is not "TIDYR production complete" —
-F11–F20 remain paused, no backend services exist, and the frontend is an
-honest, intentionally-limited preview (see §13).
+> **Update:** F11–F14 (Review, Sign, Execute, Report) have since been built
+> and are real — see `ARCHITECTURE.md` for current status. Everything below
+> this line is a point-in-time snapshot of the deployment described in its
+> own title and is left unedited as a historical record.
+
+**Status (at time of writing): Staging preview deployed.** This is not "TIDYR
+production complete" — F11–F20 were paused at this point, no backend services
+existed, and the frontend was an honest, intentionally-limited preview (see
+§13).
 
 ## 1. Protocol freeze transactions
 
