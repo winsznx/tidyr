@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { WalletReview } from "@/lib/review/use-sweep-review";
 import { useSweepReview } from "@/lib/review/use-sweep-review";
 import { usePlanSignature } from "@/lib/review/use-plan-signature";
+import { usePlanApprovals, type UsePlanApprovalsResult } from "@/lib/review/use-plan-approvals";
 import { usePlanExecution, type PlanExecutionStatus } from "@/lib/review/use-plan-execution";
 import { usePlanStore } from "@/store/plan";
 import { useExecutionStore } from "@/store/executions";
@@ -203,6 +204,49 @@ function ExecutionPanel({
   );
 }
 
+function ApprovalsPanel({
+  review,
+  approvals,
+}: {
+  review: WalletReview;
+  approvals: UsePlanApprovalsResult;
+}) {
+  const { statuses, allSufficient, isLoading, approve } = approvals;
+
+  const symbolFor = (token: string): string =>
+    review.manifest?.actions.find((a) => a.token.toLowerCase() === token.toLowerCase())
+      ?.tokenSymbol ?? token;
+
+  if (!review.plan || isLoading || statuses.length === 0) return null;
+  if (allSufficient) return null;
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-(--color-border) pt-3">
+      <p className="text-sm font-medium text-(--color-heading)">Token approvals required</p>
+      <p className="text-xs text-(--color-body)">
+        Permit2 can only pull tokens this wallet has separately approved it to spend — a signature
+        alone doesn&apos;t grant that. Each of these is a real, one-time on-chain approval
+        transaction.
+      </p>
+      {statuses
+        .filter((s) => !s.sufficient)
+        .map((s) => (
+          <div key={s.token} className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-(--color-heading)">{symbolFor(s.token)}</span>
+            <Button
+              variant="ghost"
+              size="md"
+              disabled={s.isApproving}
+              onClick={() => void approve(s.token, s.required)}
+            >
+              {s.isApproving ? "Approving…" : "Approve"}
+            </Button>
+          </div>
+        ))}
+    </div>
+  );
+}
+
 function SigningRow({
   review,
   label,
@@ -216,9 +260,15 @@ function SigningRow({
   const clearSignature = useSignatureStore((s) => s.clearSignature);
   const { connectedAddress, ownerMismatch, isPending, error, requestSignature } =
     usePlanSignature(review.plan, review.executionPlanHash);
+  const approvals = usePlanApprovals(review.plan);
 
   const reason = blockingReason(review);
-  const canSign = !reason && !ownerMismatch && !existingSignature;
+  const canSign =
+    !reason &&
+    !ownerMismatch &&
+    !existingSignature &&
+    !approvals.isLoading &&
+    approvals.allSufficient;
 
   return (
     <Card className="flex flex-col gap-4">
@@ -237,6 +287,10 @@ function SigningRow({
       </div>
 
       {review.plan ? <ManifestSummary review={review} /> : null}
+
+      {review.plan && !existingSignature ? (
+        <ApprovalsPanel review={review} approvals={approvals} />
+      ) : null}
 
       {reason ? (
         <p className="text-sm text-(--color-body)">
