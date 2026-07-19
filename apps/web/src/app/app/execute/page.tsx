@@ -73,7 +73,6 @@ function ExecutionPanel({
 }) {
   const existingSignature = useSignatureStore((s) => s.signatures[review.wallet]);
   const clearSignature = useSignatureStore((s) => s.clearSignature);
-  const setExecution = useExecutionStore((s) => s.setExecution);
   const {
     status,
     connectedAddress,
@@ -83,10 +82,13 @@ function ExecutionPanel({
     txHash,
     simulate,
     execute,
-  } = usePlanExecution(review.plan, existingSignature?.signature ?? null);
+  } = usePlanExecution(
+    review.plan,
+    existingSignature?.signature ?? null,
+    review.executionPlanHash,
+  );
 
   const autoSimulatedFor = useRef<string | null>(null);
-  const recordedFor = useRef<string | null>(null);
 
   useEffect(() => {
     if (!existingSignature) return;
@@ -101,27 +103,6 @@ function ExecutionPanel({
     clearSignature(review.wallet);
     refetchReview();
   }, [status, clearSignature, refetchReview, review.wallet]);
-
-  useEffect(() => {
-    if (status !== "success") return;
-    if (!txHash || !review.displayManifestHash || !review.executionPlanHash) return;
-    if (recordedFor.current === txHash) return;
-    recordedFor.current = txHash;
-    setExecution({
-      displayManifestHash: review.displayManifestHash,
-      executionPlanHash: review.executionPlanHash,
-      wallet: review.wallet,
-      txHash,
-      submittedAt: Date.now(),
-    });
-  }, [
-    status,
-    txHash,
-    review.displayManifestHash,
-    review.executionPlanHash,
-    review.wallet,
-    setExecution,
-  ]);
 
   if (!existingSignature) return null;
 
@@ -261,6 +242,7 @@ function SigningRow({
   const { connectedAddress, ownerMismatch, isPending, error, requestSignature } =
     usePlanSignature(review.plan, review.executionPlanHash);
   const approvals = usePlanApprovals(review.plan);
+  const executionRecords = useExecutionStore((s) => s.records);
 
   const reason = blockingReason(review);
   const canSign =
@@ -269,6 +251,18 @@ function SigningRow({
     !existingSignature &&
     !approvals.isLoading &&
     approvals.allSufficient;
+
+  // A wallet can be legitimately blocked because there's nothing left to sweep -
+  // e.g. its plan already executed successfully and the token it swept now has a
+  // zero balance. Surfacing that as a bare "Blocked" message would look like the
+  // broadcast silently failed even though it's a real, confirmed success; check
+  // for a locally recorded execution for this wallet before rendering the
+  // generic blocked state.
+  const priorExecution = !review.plan
+    ? Object.values(executionRecords)
+        .filter((r) => r.wallet.toLowerCase() === review.wallet.toLowerCase())
+        .sort((a, b) => b.submittedAt - a.submittedAt)[0]
+    : undefined;
 
   return (
     <Card className="flex flex-col gap-4">
@@ -279,6 +273,8 @@ function SigningRow({
         </div>
         {existingSignature ? (
           <Badge tone="success">Signed</Badge>
+        ) : priorExecution ? (
+          <Badge tone="success">Already executed</Badge>
         ) : reason ? (
           <Badge tone="danger">Blocked</Badge>
         ) : (
@@ -292,7 +288,30 @@ function SigningRow({
         <ApprovalsPanel review={review} approvals={approvals} />
       ) : null}
 
-      {reason ? (
+      {priorExecution ? (
+        <div className="flex flex-col gap-2 text-sm">
+          <p className="text-(--color-body)">
+            This wallet already has a real, confirmed execution on-chain — that&apos;s why no new
+            plan could be built (nothing left to sweep from what that plan covered).
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href={`/app/report/${priorExecution.displayManifestHash}`}
+              className="text-(--color-accent) underline"
+            >
+              View report
+            </a>
+            <a
+              href={`https://monadscan.com/tx/${priorExecution.txHash}`}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-(--color-accent) underline"
+            >
+              View transaction on MonadScan
+            </a>
+          </div>
+        </div>
+      ) : reason ? (
         <p className="text-sm text-(--color-body)">
           <Badge tone="danger">Blocked</Badge> <span className="ml-1">{reason}</span>
         </p>

@@ -9,6 +9,7 @@ import type { Hex, SweepPlan } from "@tidyr/shared";
 
 import { sweepExecutorAbi } from "@/lib/abi/sweep-executor";
 import { MAINNET_DEPLOYMENT } from "@/lib/deployment";
+import { useExecutionStore } from "@/store/executions";
 
 export type PlanExecutionStatus =
   | "idle"
@@ -88,14 +89,25 @@ function describeRevert(err: unknown): string {
  * `executeSweep` transaction via `writeContractAsync` and polls for its
  * receipt. Nothing here runs automatically — both steps are only ever
  * invoked from an explicit caller action (see execute/page.tsx).
+ *
+ * The moment a real tx hash comes back from `writeContractAsync`, it is
+ * persisted to `useExecutionStore` immediately — not gated on the receipt
+ * poll resolving "success". A submitted transaction is a durable fact the
+ * app must not lose track of even if this component unmounts or the page
+ * reloads before confirmation lands (e.g. the user navigates away while a
+ * broadcast is still pending); waiting for in-memory poll state to reach
+ * "success" before recording anything meant a real, successful sweep could
+ * go permanently unrecorded if the tab didn't stay open for the whole wait.
  */
 export function usePlanExecution(
   plan: SweepPlan | null,
   signature: Hex | null,
+  executionPlanHash: Hex | null,
 ): UsePlanExecutionResult {
   const publicClient = usePublicClient();
   const { address: connectedAddress } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const setExecution = useExecutionStore((s) => s.setExecution);
 
   const [status, setStatus] = useState<PlanExecutionStatus>("idle");
   const [simulatedExecutionPlanHash, setSimulatedExecutionPlanHash] = useState<Hex | null>(null);
@@ -181,11 +193,20 @@ export function usePlanExecution(
       });
       setTxHash(hash);
       setStatus("pending");
+      if (executionPlanHash) {
+        setExecution({
+          displayManifestHash: plan.displayManifestHash,
+          executionPlanHash,
+          wallet: plan.owner,
+          txHash: hash,
+          submittedAt: Date.now(),
+        });
+      }
     } catch (err) {
       setErrorMessage(describeRevert(err));
       setStatus("failed");
     }
-  }, [status, plan, signature, connectedAddress, writeContractAsync]);
+  }, [status, plan, signature, connectedAddress, writeContractAsync, executionPlanHash, setExecution]);
 
   const derivedStatus = useMemo<PlanExecutionStatus>(() => {
     if (status !== "pending") return status;
