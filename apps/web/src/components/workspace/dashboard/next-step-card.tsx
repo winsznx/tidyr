@@ -29,10 +29,10 @@ export function NextStepCard({
           }
         : {
             title: "Review your plan",
-            body: "The three-layer verified review (intent manifest, calldata compare, on-chain simulation) ships in a dedicated build pass — not rushed.",
+            body: "See the exact plan that will execute — live quotes, a verified calldata round-trip, and a live precondition check — before you sign anything.",
             href: "/app/review",
-            cta: "Review (ships in F11)",
-            disabled: true,
+            cta: "Review plan",
+            disabled: false,
           };
 
   return (

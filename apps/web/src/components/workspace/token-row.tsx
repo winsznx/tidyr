@@ -23,10 +23,14 @@ const ACTION_LABELS: Record<PlanActionType, string> = {
 export function TokenRow({
   wallet,
   token,
+  outputToken,
   hideNoRouteCandidate = false,
 }: {
   wallet: Address;
   token: TokenBalanceRow;
+  /** The wallet's chosen sell-output token (MON or USDC) — every sell action in a
+   * wallet must agree on this, since a SweepPlan has exactly one outputToken. */
+  outputToken: Address;
   hideNoRouteCandidate?: boolean;
 }) {
   const { data: sellCapability, isLoading } = useSellCapability(token.address);
@@ -57,6 +61,7 @@ export function TokenRow({
       wallet,
       token: token.address,
       type,
+      ...(type === "sell" ? { outputToken } : {}),
       ...(type === "consolidate" && primaryWallet ? { recipient: primaryWallet.address } : {}),
     });
   }

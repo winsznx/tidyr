@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
@@ -76,7 +77,9 @@ function WalletsPageContent() {
               <Button variant="ghost" onClick={clearPlan}>
                 Clear plan
               </Button>
-              <Button disabled>Review plan (ships in F11)</Button>
+              <Link href="/app/review">
+                <Button>Review plan</Button>
+              </Link>
             </div>
           </div>
         </div>

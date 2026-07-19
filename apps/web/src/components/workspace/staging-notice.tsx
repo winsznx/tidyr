@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 export function StagingNotice() {
   return (
     <div className="flex items-center gap-2 border-b border-(--color-border) bg-(--color-cloud) px-4 py-2 text-xs text-(--color-body)">
-      <Badge tone="warning">Preview</Badge>
+      <Badge tone="warning">Staging</Badge>
       <span>
-        Preview environment — transaction preparation and execution services are not yet enabled.
+        Staging environment — real Monad mainnet contracts, chain-only, no backend. Transactions
+        you sign here are real.
       </span>
     </div>
   );

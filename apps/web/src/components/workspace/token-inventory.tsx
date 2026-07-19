@@ -2,15 +2,23 @@
 
 import { useState } from "react";
 import type { Address } from "viem";
+import { MON_NATIVE_SENTINEL } from "@tidyr/shared";
 
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { EXTERNAL_ADDRESSES } from "@/lib/deployment";
 import { useTokenInventory } from "@/lib/tokens/use-token-inventory";
+import { usePlanStore } from "@/store/plan";
 import type { WalletRecord } from "@/store/wallets";
 import { TokenRow } from "./token-row";
+
+const SELL_OUTPUT_OPTIONS = [
+  { label: "MON", value: MON_NATIVE_SENTINEL },
+  { label: "USDC", value: EXTERNAL_ADDRESSES.usdc },
+] as const;
 
 function WalletTokenTable({
   wallet,
@@ -22,6 +30,22 @@ function WalletTokenTable({
   hideNoRouteCandidate: boolean;
 }) {
   const { data, isLoading, isError } = useTokenInventory(wallet.address as Address);
+  const actions = usePlanStore((s) => s.actions);
+  const setAction = usePlanStore((s) => s.setAction);
+  const [outputToken, setOutputToken] = useState<Address>(MON_NATIVE_SENTINEL);
+
+  function handleOutputTokenChange(next: Address) {
+    setOutputToken(next);
+    // Every sell action in this wallet must agree on one outputToken (a SweepPlan
+    // has exactly one) — re-point any already-assigned sell actions rather than
+    // leaving them pointed at the stale choice, which would otherwise resurface
+    // as Review's "different output tokens" blocking error.
+    for (const action of actions) {
+      if (action.wallet === wallet.address && action.type === "sell") {
+        setAction({ ...action, outputToken: next });
+      }
+    }
+  }
 
   const filtered = (data?.rows ?? []).filter((row) => {
     if (!search) return true;
@@ -71,7 +95,24 @@ function WalletTokenTable({
 
   return (
     <Card className="overflow-x-auto">
-      <p className="mb-3 text-sm font-medium text-(--color-heading)">{wallet.label}</p>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium text-(--color-heading)">{wallet.label}</p>
+        <label className="flex items-center gap-2 text-xs text-(--color-body)">
+          Sell output
+          <select
+            className="min-h-8 rounded-(--radius-input) border border-(--color-border) bg-(--color-canvas) px-2 text-sm"
+            value={outputToken}
+            onChange={(e) => handleOutputTokenChange(e.target.value as Address)}
+            aria-label={`Sell output token for ${wallet.label}`}
+          >
+            {SELL_OUTPUT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <table className="w-full min-w-[480px]">
         <thead>
           <tr className="border-b border-(--color-border) text-left text-xs text-(--color-muted)">
@@ -87,6 +128,7 @@ function WalletTokenTable({
               key={row.address}
               wallet={wallet.address as Address}
               token={row}
+              outputToken={outputToken}
               hideNoRouteCandidate={hideNoRouteCandidate}
             />
           ))}
