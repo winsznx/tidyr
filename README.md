@@ -49,34 +49,35 @@ that make it safe to sign against were verified.
 ## Why Monad
 
 Cleaning up N wallets means broadcasting a transaction from each of them. On
-most chains that's N separate wait-for-confirmation cycles, one after
-another — clean up five wallets and you're watching a spinner five times,
-possibly over several minutes.
+a strictly serial chain that's N separate wait-for-confirmation cycles, one
+after another — clean up five wallets and you're watching a spinner five
+times, possibly over several minutes. On a slower chain, "clean up every
+wallet you own" isn't meaningfully faster than just doing it by hand.
+Monad's architecture is why TIDYR is a genuine multi-wallet product instead
+of a single-wallet tool with a wallet switcher bolted on:
 
-Monad executes independent transactions in parallel: three wallets selling
-three different tokens don't touch the same state, so they don't have to
-queue behind each other — they can be included and confirmed in the same
-block. That's not a cosmetic speedup; it's the actual reason a "multi-wallet"
-product makes sense as a product at all. On a slower, strictly serial chain,
-"clean up every wallet you own" isn't meaningfully faster than doing it by
-hand one wallet at a time. To be precise about what this does and doesn't
-mean: each wallet still requires its own signature — Monad doesn't remove
-that human step, it removes the multi-minute wait *between* them (see
-`docs/research/monad-source-map.md` §6 for the exact wallet-signing model
-this is built on, corrected from an earlier, looser assumption).
+| TIDYR feature | Monad property behind it | Why it matters here |
+| --- | --- | --- |
+| Scan every wallet's balances at once | **Parallel execution** + **MonadDb** (Monad's storage engine, built for concurrent reads/writes) | Multicall reads across many wallets and tokens don't serialize against each other or the rest of chain activity |
+| Live quotes and calldata proof during Review | **100% EVM bytecode compatibility** | The real, already-deployed Uniswap V3 QuoterV2 and pool contracts are called exactly as they would be on Ethereum — no reimplementation, no approximation |
+| Simulate `executeSweep` before broadcast | **Deferred execution** (consensus and execution pipelined rather than serialized) | A read-only `eth_call` simulation isn't stuck waiting behind full settlement of the prior block, so review-before-you-sign stays fast |
+| Broadcast a sweep across multiple wallets | **Parallel execution** (independent transactions execute concurrently; conflicting ones are re-run, not queued) | Three wallets selling three unrelated tokens don't have to wait behind each other — this is the literal reason "multi-wallet" is a real feature and not marketing. To be precise: each wallet still needs its own signature; Monad removes the multi-minute *wait between* broadcasts, not the signing step itself (see `docs/research/monad-source-map.md` §6) |
+| Only call a sweep "done" once it's irreversible | **MonadBFT** — ~800ms real finality, verified directly against the live chain (`docs/research/monad-source-map.md` §2) | TIDYR's execution monitor waits for the actually-*Finalized* block state, not the optimistic first-seen/pending state most explorers show — practical here specifically because that state arrives in under a second |
+| Report reconstructed from one wallet's own on-chain events | **Single-shard global state** | Every wallet's activity lives in one queryable state; no cross-shard event aggregation is needed to rebuild a report from `getLogs` |
 
-Monad's consensus (MonadBFT) also reaches real finality fast — around 800ms,
-verified directly against the live chain, not taken from a marketing figure
-(`docs/research/monad-source-map.md` §2). TIDYR's execution monitor
-deliberately waits for that actually-finalized state before ever calling a
-sweep "done," rather than the optimistic first-seen/pending state most block
-explorers show immediately.
-
-And none of this required different code: Monad is fully EVM-compatible, so
-`SweepExecutor` and its adapters are ordinary Solidity contracts, tested with
-the same Foundry tooling used on Ethereum, deployed with zero chain-specific
-changes — the parallelism and fast finality are properties of the chain
-underneath, not something the contracts had to be written differently to get.
+The first three rows (parallel execution, MonadBFT/finality, EVM
+compatibility) are independently verified against the live chain in
+`docs/research/monad-source-map.md`, not taken on faith. The others
+(MonadDb, deferred execution, single-shard state) reflect Monad's own
+published architecture rather than something TIDYR independently measured —
+cited as context, not re-verified by this project. None of this required
+writing different contracts: `SweepExecutor` and its adapters are ordinary
+Solidity, tested with the same Foundry tooling used on Ethereum, deployed
+with zero chain-specific changes. The performance headroom behind all of
+this is Monad's stated throughput target (10,000 TPS via superscalar
+pipelining of propose/vote/execute/persist) — TIDYR doesn't need anywhere
+near that much, but it's why none of the above comes at the cost of the
+other.
 
 ## How it works, end to end
 
