@@ -46,6 +46,38 @@ anywhere in the flow — see [`ARCHITECTURE.md`](ARCHITECTURE.md) for exactly
 how that's structured, and [`SECURITY.md`](SECURITY.md) for how the contracts
 that make it safe to sign against were verified.
 
+## Why Monad
+
+Cleaning up N wallets means broadcasting a transaction from each of them. On
+most chains that's N separate wait-for-confirmation cycles, one after
+another — clean up five wallets and you're watching a spinner five times,
+possibly over several minutes.
+
+Monad executes independent transactions in parallel: three wallets selling
+three different tokens don't touch the same state, so they don't have to
+queue behind each other — they can be included and confirmed in the same
+block. That's not a cosmetic speedup; it's the actual reason a "multi-wallet"
+product makes sense as a product at all. On a slower, strictly serial chain,
+"clean up every wallet you own" isn't meaningfully faster than doing it by
+hand one wallet at a time. To be precise about what this does and doesn't
+mean: each wallet still requires its own signature — Monad doesn't remove
+that human step, it removes the multi-minute wait *between* them (see
+`docs/research/monad-source-map.md` §6 for the exact wallet-signing model
+this is built on, corrected from an earlier, looser assumption).
+
+Monad's consensus (MonadBFT) also reaches real finality fast — around 800ms,
+verified directly against the live chain, not taken from a marketing figure
+(`docs/research/monad-source-map.md` §2). TIDYR's execution monitor
+deliberately waits for that actually-finalized state before ever calling a
+sweep "done," rather than the optimistic first-seen/pending state most block
+explorers show immediately.
+
+And none of this required different code: Monad is fully EVM-compatible, so
+`SweepExecutor` and its adapters are ordinary Solidity contracts, tested with
+the same Foundry tooling used on Ethereum, deployed with zero chain-specific
+changes — the parallelism and fast finality are properties of the chain
+underneath, not something the contracts had to be written differently to get.
+
 ## How it works, end to end
 
 ```mermaid
