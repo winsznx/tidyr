@@ -10,7 +10,7 @@ and risk documentation required before any implementation begins.
 
 - `docs/research/monad-source-map.md`
 - `docs/research/external-addresses.md`
-- `docs/architecture.md`
+- `docs/architecture.md` (since moved to root and rewritten as `ARCHITECTURE.md`)
 - `docs/implementation-plan.md`
 - `docs/requirements-traceability.md`
 - `docs/risk-register.md`
